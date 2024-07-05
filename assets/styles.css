@@ -1,0 +1,36 @@
+body {
+    background-color: #111111;
+    font-family: "Montserrat", "Helvetica", "Open Sans", "Arial";
+}
+
+.navbar {
+    background-color: #5d0000;
+    color: white;
+}
+
+.sidebar {
+    background-color: #11082d;
+    padding-top: 20px;
+}
+
+.sidebar .nav-link {
+    color: #738297;
+    margin-bottom: 10px;
+}
+
+.sidebar .nav-link:hover, .sidebar .nav-link.active {
+    color: white;
+}
+
+.card {
+    background-color: #333333 !important; /* Change this color to your preference */
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 20px;
+}
+
+
+h1 {
+    color: white;
+    margin: 20px 0;
+}
