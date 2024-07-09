@@ -1,0 +1,9 @@
+aiofiles==24.1.0
+dash==2.17.1
+dash_bootstrap_components==1.6.0
+Flask_Caching==2.3.0
+orjson==3.10.6
+pandas==2.2.2
+plotly==5.22.0
+tqdm==4.66.4
+watchdog==4.0.1
