@@ -14,7 +14,6 @@ from dash import dcc, html
 from dash.dependencies import Input, Output
 import logging
 import threading
-from watchdog_handlers import start_watcher
 from cache_config import cache
 from callbacks import update_graphs, get_cached_data, get_visualizations
 from layouts import (
@@ -49,14 +48,9 @@ input_directory = "/home/iaes/iaesDash/source/jsondata/fm1"
 # Path to the output combined JSON file
 output_file = "/home/iaes/iaesDash/source/jsondata/fm1/output/data.json"
 
-# Start the file watcher to monitor changes in a separate thread
-def start_file_watcher():
-    logger.info("Starting file watcher")
-    start_watcher(input_directory)
-
-watcher_thread = threading.Thread(target=start_file_watcher)
-watcher_thread.daemon = True  # This ensures the thread will exit when the main program exits
-watcher_thread.start()
+# Call the cached functions once to populate the cache
+data, total_cyber9_reports = get_cached_data()
+figs = get_visualizations()
 
 # Define the app layout
 app.layout = html.Div(
