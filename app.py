@@ -8,12 +8,12 @@ data, updates the visualizations in real-time, and caches data for
 efficient retrieval. It uses the watchdog library to handle file system 
 events and threads to run the file watcher in the background.
 """
+
 import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import logging
-import threading
 from cache_config import cache
 from callbacks import update_graphs, get_cached_data, get_visualizations
 from layouts import (
@@ -24,14 +24,6 @@ from layouts import (
     protocol_analysis_layout,
     data_flow_layout
 )
-
-# Attempt to use orjson if available
-try:
-    import orjson
-    import dash.dash
-    dash.dash._json = orjson
-except ImportError:
-    pass
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -201,15 +193,9 @@ app.callback(
         Output("protocol-pie-chart", "figure"),
         Output("parallel-categories", "figure"),
         Output("stacked-area", "figure"),
-        
     ],
     [Input("interval-component", "n_intervals")]
 )(update_graphs)
-
-# Function to invalidate cache
-def invalidate_cache():
-    cache.delete_memoized(get_cached_data)
-    cache.delete_memoized(get_visualizations)
 
 # Run the app
 if __name__ == "__main__":

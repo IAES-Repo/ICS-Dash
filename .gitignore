@@ -1,9 +1,3 @@
-### Python ###
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
 # Ignore the jsondata/fm1 folder
 jsondata/fm1
 
