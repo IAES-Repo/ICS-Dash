@@ -1,11 +1,3 @@
-"""
-This module defines the layout and initial figures for a Dash application 
-overview page. The layout includes various graphs and indicators that are 
-updated periodically using intervals. Additional layouts for other pages 
-such as Top 10s, Traffic Analysis, Activity Patterns, Protocol Analysis, 
-and Data Flow are also defined.
-"""
-
 from dash import dcc, html
 from data_processing import create_visualizations, read_data
 import plotly.graph_objects as go
@@ -30,7 +22,7 @@ try:
         fig_protocol_pie, 
         fig_parallel,
         fig_stacked_area,
-    ) = create_visualizations(total_cyber9_reports)
+    ) = create_visualizations(data, total_cyber9_reports)
 except Exception as e:
     logger.error(f"Error reading initial data or creating visualizations: {e}")
     (

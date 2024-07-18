@@ -1,11 +1,3 @@
-"""
-This module processes data for the visualizations in a Dash application. 
-It includes asynchronous functions to read JSON files, handle large data 
-sets, and generate various visualizations such as indicators, heatmaps, 
-pie charts, and Sankey diagrams. It uses orjson for fast JSON processing 
-when available.
-"""
-
 import os
 import pandas as pd
 import plotly.express as px
@@ -14,6 +6,7 @@ import plotly.colors as colors
 import logging
 import asyncio
 import aiofiles
+import time
 
 # Attempt to use orjson if available for faster JSON operations
 try:
@@ -24,7 +17,6 @@ except ImportError:
 # FOLDER DIRECTORIES
 DATA_FOLDER = "/home/iaes/iaesDash/source/jsondata/fm1/output"
 C9REPORTS_FOLDER = "/home/iaes/iaesDash/source/c9reports"
-MAX_ROWS = 1000000
 
 # Initialize logger
 logging.basicConfig(level=logging.INFO)
@@ -109,12 +101,17 @@ def count_files_in_directory(directory):
         return None
 
 # Function to create visualizations from the data
-def create_visualizations(total_cyber9_reports):
+def create_visualizations(all_data, total_cyber9_reports):
     try:
-        all_data, total_cyber9_reports = read_data()
+        start_time = time.time()
+        logger.info("Starting data reading process...")
         if all_data is None:
             logger.error("No data available to create visualizations.")
             return (go.Figure(),) * 12
+
+        # Dynamically set MAX_ROWS based on the total number of records
+        MAX_ROWS = len(all_data)
+        logger.info(f"Setting MAX_ROWS to {MAX_ROWS}")
 
         df = pd.DataFrame(all_data).head(MAX_ROWS)
         if df.empty:
@@ -122,6 +119,7 @@ def create_visualizations(total_cyber9_reports):
             return (go.Figure(),) * 12
 
         logger.info(f"DataFrame head:\n{df.head()}")
+        logger.info(f"Data reading process completed in {time.time() - start_time:.2f} seconds.")
 
         # Ensure all required columns are present
         for col in required_columns:
@@ -135,6 +133,7 @@ def create_visualizations(total_cyber9_reports):
         custom_colorscale = [(0, "red"), (0.33, "yellow"), (0.67, "green"), (1, "blue")]
 
         # Create various visualizations
+        #logger.info("Creating total packets indicator...")
         total_packets = df["TOTPACKETS"].sum()
         fig_indicator_packets = go.Figure(
             go.Indicator(
@@ -144,7 +143,9 @@ def create_visualizations(total_cyber9_reports):
         fig_indicator_packets.update_layout(
             font=dict(color="white"), template="plotly_dark", height=250
         )
+        logger.info(f"Total packets indicator created in {time.time() - start_time:.2f} seconds.")
 
+        #logger.info("Creating total connections indicator...")
         total_data_points = len(df)
         fig_indicator_data_points = go.Figure(
             go.Indicator(
@@ -156,7 +157,9 @@ def create_visualizations(total_cyber9_reports):
         fig_indicator_data_points.update_layout(
             font=dict(color="white"), template="plotly_dark", height=250
         )
+        logger.info(f"Total connections indicator created in {time.time() - start_time:.2f} seconds.")
 
+        #logger.info("Creating cyber9 reports indicator...")
         fig_indicator_cyber_reports = go.Figure(
             go.Indicator(
                 mode="number",
@@ -167,9 +170,13 @@ def create_visualizations(total_cyber9_reports):
         fig_indicator_cyber_reports.update_layout(
             font=dict(color="white"), template="plotly_dark", height=250
         )
+        logger.info(f"Cyber9 reports indicator created in {time.time() - start_time:.2f} seconds.")
 
+        #logger.info("Creating treemap for source, destination IP, and protocol distribution...")
         fig_treemap_src_dst_protocol = px.treemap(df, path=['SRCIP', 'DSTIP', 'PROTOCOL'],template="plotly_dark", values='TOTPACKETS',height=600, title='Source, Destination IP and Protocol Distribution')
+        logger.info(f"Treemap created in {time.time() - start_time:.2f} seconds.")
 
+        #logger.info("Creating pie chart for total data by top 10 source IPs...")
         df["TOTDATA"] = pd.to_numeric(df["TOTDATA_MB"], errors="coerce")
         total_data_by_srcip = df.groupby("SRCIP", as_index=False)["TOTDATA"].sum()
         top_10_data = total_data_by_srcip.nlargest(10, "TOTDATA")
@@ -183,6 +190,12 @@ def create_visualizations(total_cyber9_reports):
             color_discrete_sequence=[c[1] for c in custom_colorscale],
             template="plotly_dark",
         )
+        logger.info(f"Pie chart created in {time.time() - start_time:.2f} seconds.")
+
+        logger.info("Processing hourly activity data...")
+        for col in required_hourly_columns:
+            logger.debug(f"Processing column {col} for hourly activity...")
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
 
         hourly_activity = df[required_hourly_columns].sum().values.reshape(1, -1)
         logger.debug(f"Hourly Activity Data Shape: {hourly_activity.shape}")
@@ -218,6 +231,12 @@ def create_visualizations(total_cyber9_reports):
             yaxis2=dict(title="", overlaying="y", side="right", showgrid=False),
             margin=dict(l=50, r=50, t=50, b=50),
         )
+        logger.info(f"Hourly activity heatmap created in {time.time() - start_time:.2f} seconds.")
+
+        logger.info("Processing daily activity data...")
+        for col in required_daily_columns:
+            logger.debug(f"Processing column {col} for daily activity...")
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
 
         daily_activity = df[required_daily_columns].sum().values.reshape(1, -1)
         logger.debug(f"Daily Activity Data Shape: {daily_activity.shape}")
@@ -238,7 +257,9 @@ def create_visualizations(total_cyber9_reports):
             yaxis_title="Activity",
             template="plotly_dark",
         )
+        logger.info(f"Daily activity heatmap created in {time.time() - start_time:.2f} seconds.")
 
+        logger.info("Processing Sankey data...")
         sankey_data = df.groupby(["SRCIP", "DSTIP"], as_index=False)["TOTDATA_MB"].sum()
         top_connections = sankey_data.nlargest(10, "TOTDATA_MB")
         all_nodes = list(set(top_connections["SRCIP"]).union(set(top_connections["DSTIP"])))
@@ -264,6 +285,7 @@ def create_visualizations(total_cyber9_reports):
         fig_sankey.update_layout(
             title_text="Top 10 IP Data Flows", font_size=10, template="plotly_dark"
         )
+        logger.info(f"Sankey diagram created in {time.time() - start_time:.2f} seconds.")
 
         top_connections["norm_data"] = (top_connections["TOTDATA_MB"] - top_connections["TOTDATA_MB"].min()) / (top_connections["TOTDATA_MB"].max() - top_connections["TOTDATA_MB"].min())
         colorscale = "jet"
@@ -314,7 +336,9 @@ def create_visualizations(total_cyber9_reports):
             yaxis=dict(showgrid=False, zeroline=False, visible=False),
             template="plotly_dark",
         )
+        logger.info(f"Sankey diagram with heatmap created in {time.time() - start_time:.2f} seconds.")
 
+        #logger.info("Creating protocol pie chart...")
         fig_protocol_pie = px.pie(
             df,
             names="PROTOCOL",
@@ -324,7 +348,9 @@ def create_visualizations(total_cyber9_reports):
             template="plotly_dark",
         )
         fig_protocol_pie.update_traces(textinfo="percent+label")
+        logger.info(f"Protocol pie chart created in {time.time() - start_time:.2f} seconds.")
 
+        #logger.info("Creating parallel categories plot...")
         top_10_connections = df.nlargest(10, "TOTPACKETS")
         fig_parallel = px.parallel_categories(
             top_10_connections,
@@ -340,9 +366,10 @@ def create_visualizations(total_cyber9_reports):
             },
             title="Top 10 Connections by Total Packets",
         )
+        logger.info(f"Parallel categories plot created in {time.time() - start_time:.2f} seconds.")
 
-        hourly_columns = required_hourly_columns
-        protocol_agg = df.groupby("PROTOCOL", as_index=False)[hourly_columns].sum()
+        #logger.info("Creating stacked area chart...")
+        protocol_agg = df.groupby("PROTOCOL", as_index=False)[required_hourly_columns].sum()
         protocol_agg_melted = protocol_agg.melt(id_vars=["PROTOCOL"], var_name="Hour", value_name="Total Packets")
 
         fig_stacked_area = px.area(
@@ -358,7 +385,9 @@ def create_visualizations(total_cyber9_reports):
             yaxis_title="Total Packets",
             legend_title="Protocol",
         )
+        logger.info(f"Stacked area chart created in {time.time() - start_time:.2f} seconds.")
 
+        #logger.info(f"Finished creating visualizations in {time.time() - start_time:.2f} seconds.")
         return (
             fig_indicator_packets,
             fig_indicator_data_points,

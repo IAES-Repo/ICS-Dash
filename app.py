@@ -1,20 +1,9 @@
-"""
-This Dash application creates an interactive web dashboard for monitoring 
-and analyzing ICS (Industrial Control Systems) network data. The dashboard
-includes various visualizations such as top 10 lists, traffic analysis, 
-activity patterns,protocol analysis, and data flow. The application 
-monitors a specified directory for changes in JSON files, processes the 
-data, updates the visualizations in real-time, and caches data for 
-efficient retrieval. It uses the watchdog library to handle file system 
-events and threads to run the file watcher in the background.
-"""
-
 import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import logging
-from cache_config import cache
+from cache_config import cache, update_cache
 from callbacks import update_graphs, get_cached_data, get_visualizations
 from layouts import (
     overview_layout,
@@ -24,10 +13,15 @@ from layouts import (
     protocol_analysis_layout,
     data_flow_layout
 )
+from watchdog_handler import start_watchdog  # Import the watchdog handler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Suppress Werkzeug logs
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 # Initialize the Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
@@ -35,14 +29,11 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_
 # Initialize cache with the server
 cache.init_app(app.server)
 
-# Path to the directory containing JSON files
-input_directory = "/home/iaes/iaesDash/source/jsondata/fm1"
-# Path to the output combined JSON file
-output_file = "/home/iaes/iaesDash/source/jsondata/fm1/output/data.json"
-
-# Call the cached functions once to populate the cache
-data, total_cyber9_reports = get_cached_data()
-figs = get_visualizations()
+def initialize_cache():
+    logger.info("Populating cache with initial data...")
+    data, total_cyber9_reports = get_cached_data()
+    figs = get_visualizations()
+    logger.info("Cache initialized successfully.")
 
 # Define the app layout
 app.layout = html.Div(
@@ -197,10 +188,18 @@ app.callback(
     [Input("interval-component", "n_intervals")]
 )(update_graphs)
 
-# Run the app
+# Start the watchdog only once in the main process
 if __name__ == "__main__":
     try:
+        logger.info("Starting the application...")
+
+        logger.info("Running cache initialization and watchdog setup...")
+        initialize_cache()
+        directory_to_watch = "/home/iaes/iaesDash/source/jsondata/fm1/output"
+        start_watchdog(directory_to_watch, app.server)
+        #logger.info(f"Started watching directory: {directory_to_watch}")
+
         logger.info("Running the server")
-        app.run_server(host="127.0.0.1", port=8050, debug=True)
+        app.run_server(host="0.0.0.0", port=8050, debug=False)  # Set debug to False
     except Exception as e:
         logger.error(f"Error running the server: {e}")

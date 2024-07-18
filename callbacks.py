@@ -1,10 +1,3 @@
-"""
-This module handles data processing and visualization for a Dash 
-application. It includes functions to read data, generate visualizations, 
-and update graphs. The functions are designed to work with cached data 
-and handle errors, logging any issues that occur during execution.
-"""
-
 import logging
 from data_processing import read_data, create_visualizations
 from cache_config import cache
@@ -28,7 +21,7 @@ def get_cached_data():
 def get_visualizations():
     try:
         data, total_cyber9_reports = get_cached_data()  # Get cached data
-        return create_visualizations(total_cyber9_reports)  # Create visualizations
+        return create_visualizations(data, total_cyber9_reports)  # Create visualizations
     except Exception as e:
         logger.error(f"Error getting visualizations: {e}")  # Log any errors encountered
         return [go.Figure()] * 12  # Return a list of empty figures in case of error
