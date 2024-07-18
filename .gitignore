@@ -1,5 +1,7 @@
 # Ignore the jsondata/fm1 folder
 jsondata/fm1
+jsondata/fm2
+jsondata/fm3
 
 # Ignore files
 /startup.sh
