@@ -10,35 +10,37 @@ logger = logging.getLogger(__name__)
 try:
     data, total_cyber9_reports = read_data()
     (
-        fig_indicator_packets, 
-        fig_indicator_data_points, 
-        fig_indicator_cyber_reports, 
+        fig_indicator_packets,
+        fig_indicator_data_points,
+        fig_indicator_cyber_reports,
         fig_treemap_src_dst_protocol,
-        fig3, 
-        fig4, 
-        fig5, 
-        fig_sankey, 
-        fig_sankey_heatmap, 
-        fig_protocol_pie, 
+        fig3,
+        fig4,
+        fig5,
+        fig_sankey,
+        fig_sankey_heatmap,
+        fig_protocol_pie,
         fig_parallel,
         fig_stacked_area,
+        fig_anomalies
     ) = create_visualizations(data, total_cyber9_reports)
 except Exception as e:
     logger.error(f"Error reading initial data or creating visualizations: {e}")
     (
-        fig_indicator_packets, 
-        fig_indicator_data_points, 
-        fig_indicator_cyber_reports, 
+        fig_indicator_packets,
+        fig_indicator_data_points,
+        fig_indicator_cyber_reports,
         fig_treemap_src_dst_protocol,
-        fig3, 
-        fig4, 
-        fig5, 
-        fig_sankey, 
-        fig_sankey_heatmap, 
-        fig_protocol_pie, 
+        fig3,
+        fig4,
+        fig5,
+        fig_sankey,
+        fig_sankey_heatmap,
+        fig_protocol_pie,
         fig_parallel,
         fig_stacked_area,
-    ) = [go.Figure()] * 12
+        fig_anomalies
+    ) = [go.Figure()] * 13
 
 # Define the layout for the overview page
 overview_layout = html.Div(
@@ -152,6 +154,17 @@ overview_layout = html.Div(
                     className="col-md-12",
                     children=[
                         dcc.Graph(id="stacked-area", figure=fig_stacked_area, className="card")
+                    ],
+                ),
+            ],
+        ),
+        html.Div(
+            className="row",
+            children=[
+                html.Div(
+                    className="col-md-12",
+                    children=[
+                        dcc.Graph(id="anomalies-scatter", figure=fig_anomalies, className="card")
                     ],
                 ),
             ],

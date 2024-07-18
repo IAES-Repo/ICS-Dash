@@ -7,6 +7,8 @@ import logging
 import asyncio
 import aiofiles
 import time
+from sklearn.ensemble import IsolationForest
+import numpy as np
 
 # Attempt to use orjson if available for faster JSON operations
 try:
@@ -99,6 +101,41 @@ def count_files_in_directory(directory):
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         return None
+    
+def detect_anomalies(df):
+    # Ensure required columns are present
+    required_cols = ['TOTPACKETS', 'TOTDATA_MB', 'UNIQUE_CONNECTIONS']
+    for col in required_cols:
+        if col not in df.columns:
+            logger.error(f"Required column {col} for anomaly detection is missing.")
+            return pd.DataFrame()  # Return empty DataFrame if required columns are missing
+
+    # Log data types of required columns
+    for col in required_cols:
+        logger.info(f"Data type of {col}: {df[col].dtype}")
+
+    # Ensure the columns are numeric
+    try:
+        df[required_cols] = df[required_cols].apply(pd.to_numeric, errors='coerce')
+    except Exception as e:
+        logger.error(f"Error converting required columns to numeric: {e}")
+        return pd.DataFrame()  # Return empty DataFrame if conversion fails
+
+    # Check for missing values
+    if df[required_cols].isnull().any().any():
+        logger.error("Missing values found in required columns.")
+        return pd.DataFrame()  # Return empty DataFrame if there are missing values
+
+    # Select features for the model
+    features = df[required_cols]
+
+    # Train Isolation Forest
+    iso_forest = IsolationForest(contamination=0.01)
+    df['ANOMALY_IF'] = iso_forest.fit_predict(features)
+
+    # Identify anomalies
+    anomalies = df[df['ANOMALY_IF'] == -1]
+    return anomalies
 
 # Function to create visualizations from the data
 def create_visualizations(all_data, total_cyber9_reports):
@@ -107,7 +144,7 @@ def create_visualizations(all_data, total_cyber9_reports):
         logger.info("Starting data reading process...")
         if all_data is None:
             logger.error("No data available to create visualizations.")
-            return (go.Figure(),) * 12
+            return (go.Figure(),) * 13
 
         # Dynamically set MAX_ROWS based on the total number of records
         MAX_ROWS = len(all_data)
@@ -116,7 +153,7 @@ def create_visualizations(all_data, total_cyber9_reports):
         df = pd.DataFrame(all_data).head(MAX_ROWS)
         if df.empty:
             logger.error("No valid data in DataFrame.")
-            return (go.Figure(),) * 12
+            return (go.Figure(),) * 13
 
         logger.info(f"DataFrame head:\n{df.head()}")
         logger.info(f"Data reading process completed in {time.time() - start_time:.2f} seconds.")
@@ -127,13 +164,13 @@ def create_visualizations(all_data, total_cyber9_reports):
                 df[col] = 0
         logger.info(f"DataFrame with required columns:\n{df.head()}")
 
-        # Convert TOTDATA to numeric
+        # Ensure TOTDATA is a string before using .str accessor
+        df["TOTDATA"] = df["TOTDATA"].astype(str)
         df["TOTDATA_MB"] = pd.to_numeric(df["TOTDATA"].str.replace(" MB", ""), errors='coerce').fillna(0)
 
         custom_colorscale = [(0, "red"), (0.33, "yellow"), (0.67, "green"), (1, "blue")]
 
         # Create various visualizations
-        #logger.info("Creating total packets indicator...")
         total_packets = df["TOTPACKETS"].sum()
         fig_indicator_packets = go.Figure(
             go.Indicator(
@@ -145,7 +182,6 @@ def create_visualizations(all_data, total_cyber9_reports):
         )
         logger.info(f"Total packets indicator created in {time.time() - start_time:.2f} seconds.")
 
-        #logger.info("Creating total connections indicator...")
         total_data_points = len(df)
         fig_indicator_data_points = go.Figure(
             go.Indicator(
@@ -159,7 +195,6 @@ def create_visualizations(all_data, total_cyber9_reports):
         )
         logger.info(f"Total connections indicator created in {time.time() - start_time:.2f} seconds.")
 
-        #logger.info("Creating cyber9 reports indicator...")
         fig_indicator_cyber_reports = go.Figure(
             go.Indicator(
                 mode="number",
@@ -172,11 +207,9 @@ def create_visualizations(all_data, total_cyber9_reports):
         )
         logger.info(f"Cyber9 reports indicator created in {time.time() - start_time:.2f} seconds.")
 
-        #logger.info("Creating treemap for source, destination IP, and protocol distribution...")
-        fig_treemap_src_dst_protocol = px.treemap(df, path=['SRCIP', 'DSTIP', 'PROTOCOL'],template="plotly_dark", values='TOTPACKETS',height=600, title='Source, Destination IP and Protocol Distribution')
+        fig_treemap_src_dst_protocol = px.treemap(df, path=['SRCIP', 'DSTIP', 'PROTOCOL'], template="plotly_dark", values='TOTPACKETS', height=600, title='Source, Destination IP and Protocol Distribution')
         logger.info(f"Treemap created in {time.time() - start_time:.2f} seconds.")
 
-        #logger.info("Creating pie chart for total data by top 10 source IPs...")
         df["TOTDATA"] = pd.to_numeric(df["TOTDATA_MB"], errors="coerce")
         total_data_by_srcip = df.groupby("SRCIP", as_index=False)["TOTDATA"].sum()
         top_10_data = total_data_by_srcip.nlargest(10, "TOTDATA")
@@ -338,7 +371,6 @@ def create_visualizations(all_data, total_cyber9_reports):
         )
         logger.info(f"Sankey diagram with heatmap created in {time.time() - start_time:.2f} seconds.")
 
-        #logger.info("Creating protocol pie chart...")
         fig_protocol_pie = px.pie(
             df,
             names="PROTOCOL",
@@ -350,10 +382,8 @@ def create_visualizations(all_data, total_cyber9_reports):
         fig_protocol_pie.update_traces(textinfo="percent+label")
         logger.info(f"Protocol pie chart created in {time.time() - start_time:.2f} seconds.")
 
-        #logger.info("Creating parallel categories plot...")
-        top_10_connections = df.nlargest(10, "TOTPACKETS")
         fig_parallel = px.parallel_categories(
-            top_10_connections,
+            df.nlargest(10, "TOTPACKETS"),
             dimensions=["SRCIP", "DSTIP", "PROTOCOL"],
             color="TOTPACKETS",
             color_continuous_scale=px.colors.sequential.Jet,
@@ -368,7 +398,6 @@ def create_visualizations(all_data, total_cyber9_reports):
         )
         logger.info(f"Parallel categories plot created in {time.time() - start_time:.2f} seconds.")
 
-        #logger.info("Creating stacked area chart...")
         protocol_agg = df.groupby("PROTOCOL", as_index=False)[required_hourly_columns].sum()
         protocol_agg_melted = protocol_agg.melt(id_vars=["PROTOCOL"], var_name="Hour", value_name="Total Packets")
 
@@ -387,7 +416,26 @@ def create_visualizations(all_data, total_cyber9_reports):
         )
         logger.info(f"Stacked area chart created in {time.time() - start_time:.2f} seconds.")
 
-        #logger.info(f"Finished creating visualizations in {time.time() - start_time:.2f} seconds.")
+        df['CONNECTION'] = df['SRCIP'] + '-' + df['DSTIP'] + '-' + df['SRCPORT'].astype(str) + '-' + df['DSTPORT'].astype(str)
+        df['UNIQUE_CONNECTIONS'] = df['CONNECTION'].nunique()
+
+        # Detect anomalies
+        anomalies = detect_anomalies(df)
+
+        # Add new figure for anomalies
+        fig_anomalies = px.scatter(
+            anomalies,
+            x='SRCIP',
+            y='DSTIP',
+            size='TOTDATA_MB',
+            color='PROTOCOL',
+            hover_data=['TOTPACKETS', 'TOTDATA_MB', 'SRCIP', 'DSTIP'],
+            title='Detected Anomalies for TCP connections',
+            template='plotly_dark'
+        )
+        fig_anomalies.update_layout(height=600)
+        logger.info(f"Anomalies scatter plot created in {time.time() - start_time:.2f} seconds.")
+
         return (
             fig_indicator_packets,
             fig_indicator_data_points,
@@ -401,7 +449,8 @@ def create_visualizations(all_data, total_cyber9_reports):
             fig_protocol_pie,
             fig_parallel,
             fig_stacked_area,
+            fig_anomalies
         )
     except Exception as e:
         logger.error(f"Error creating visualizations: {e}")
-        return (go.Figure(),) * 12
+        return (go.Figure(),) * 13

@@ -180,10 +180,11 @@ app.callback(
         Output("hourly-heatmap", "figure"),
         Output("daily-heatmap", "figure"),
         Output("sankey-diagram", "figure"),
-        Output("sankey-heatmap-diagram", "figure"), 
+        Output("sankey-heatmap-diagram", "figure"),
         Output("protocol-pie-chart", "figure"),
         Output("parallel-categories", "figure"),
         Output("stacked-area", "figure"),
+        Output("anomalies-scatter", "figure"),
     ],
     [Input("interval-component", "n_intervals")]
 )(update_graphs)

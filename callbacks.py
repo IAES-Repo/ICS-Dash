@@ -24,7 +24,7 @@ def get_visualizations():
         return create_visualizations(data, total_cyber9_reports)  # Create visualizations
     except Exception as e:
         logger.error(f"Error getting visualizations: {e}")  # Log any errors encountered
-        return [go.Figure()] * 12  # Return a list of empty figures in case of error
+        return [go.Figure()] * 13  # Return a list of empty figures in case of error
 
 # Function to update graphs periodically, intended to be used as a callback
 def update_graphs(n_intervals):
@@ -34,4 +34,4 @@ def update_graphs(n_intervals):
         return figs
     except Exception as e:
         logger.error(f"Error updating graphs: {e}")  # Log any errors encountered
-        return [go.Figure()] * 12  # Return a list of empty figures in case of error
+        return [go.Figure()] * 13  # Return a list of empty figures in case of error
