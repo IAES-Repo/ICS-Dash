@@ -201,6 +201,6 @@ if __name__ == "__main__":
         #logger.info(f"Started watching directory: {directory_to_watch}")
 
         logger.info("Running the server")
-        app.run_server(host="0.0.0.0", port=8050, debug=False)  # Set debug to False
+        app.run_server(host="0.0.0.0", port=8050, debug=True)  # Set debug to False
     except Exception as e:
         logger.error(f"Error running the server: {e}")
