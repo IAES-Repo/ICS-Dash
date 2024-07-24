@@ -6,7 +6,6 @@ import logging
 # Set up logger
 logger = logging.getLogger(__name__)
 
-# Read data initially to create figures
 try:
     data, total_cyber9_reports = read_data()
     (
@@ -25,7 +24,7 @@ try:
         fig_anomalies
     ) = create_visualizations(data, total_cyber9_reports)
 except Exception as e:
-    logger.error(f"Error reading initial data or creating visualizations: {e}")
+    logger.error(f"Error reading initial data or creating visualizations: {e}", exc_info=True)
     (
         fig_indicator_packets,
         fig_indicator_data_points,
@@ -42,14 +41,14 @@ except Exception as e:
         fig_anomalies
     ) = [go.Figure()] * 13
 
-# Define the layout for the overview page
 overview_layout = html.Div(
     [
         dcc.Interval(
             id='interval-component',
-            interval=60*1000,  # Update every minute
+            interval=600*1000, # update every 10 mintues
             n_intervals=0
         ),
+        dcc.Store(id='new-data-available', data=False),  # Hidden component to track new data
         html.H1("Overview", style={"color": "white", "margin": "16px 0"}),
         html.Div(
             className="row",
@@ -172,38 +171,32 @@ overview_layout = html.Div(
     ]
 )
 
-# Define other layouts similarly
 top10_layout = html.Div(
     [
         html.H1("Top 10s", style={"color": "white", "margin": "16px 0"}),
-        # Add your content for the top 10s layout here
     ]
 )
 
 traffic_analysis_layout = html.Div(
     [
         html.H1("Traffic Analysis", style={"color": "white", "margin": "16px 0"}),
-        # Add your content for the traffic analysis layout here
     ]
 )
 
 activity_patterns_layout = html.Div(
     [
         html.H1("Activity Patterns", style={"color": "white", "margin": "16px 0"}),
-        # Add your content for the activity patterns layout here
     ]
 )
 
 protocol_analysis_layout = html.Div(
     [
         html.H1("Protocol Analysis", style={"color": "white", "margin": "16px 0"}),
-        # Add your content for the protocol analysis layout here
     ]
 )
 
 data_flow_layout = html.Div(
     [
         html.H1("Data Flow", style={"color": "white", "margin": "16px 0"}),
-        # Add your content for the data flow layout here
     ]
 )

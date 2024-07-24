@@ -10,42 +10,17 @@ import time
 from sklearn.ensemble import IsolationForest
 import numpy as np
 
-# Attempt to use orjson if available for faster JSON operations
 try:
     import orjson as json
 except ImportError:
     import json
 
-# FOLDER DIRECTORIES
 DATA_FOLDER = "/home/iaes/iaesDash/source/jsondata/fm1/output"
 C9REPORTS_FOLDER = "/home/iaes/iaesDash/source/c9reports"
 
-# Initialize logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Required columns for data processing
-required_columns = [
-    "SRCIP", "DSTIP", "TOTPACKETS", "TOTDATA", "PROTOCOL",
-    "12AM", "1AM", "2AM", "3AM", "4AM", "5AM", "6AM", "7AM",
-    "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM",
-    "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM",
-    "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
-]
-
-# Required hourly columns
-required_hourly_columns = [
-    "12AM", "1AM", "2AM", "3AM", "4AM", "5AM", "6AM", "7AM",
-    "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM",
-    "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM",
-]
-
-# Required daily columns
-required_daily_columns = [
-    "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
-]
-
-# Asynchronous function to read a single JSON file
 async def read_json_file(filepath):
     async with aiofiles.open(filepath, mode='rb') as f:
         content = await f.read()
@@ -55,7 +30,6 @@ async def read_json_file(filepath):
             logger.error(f"Error reading {filepath}: {e}")
             return None
 
-# Asynchronous function to read all JSON files in the data folder
 async def read_all_files():
     all_data = []
     tasks = []
@@ -70,17 +44,15 @@ async def read_all_files():
     logger.info(f"Total records loaded: {len(all_data)}")
     return all_data
 
-# Function to read data asynchronously
 async def async_read_data():
     all_data = await read_all_files()
     total_cyber9_reports = count_files_in_directory(C9REPORTS_FOLDER)
     return all_data, total_cyber9_reports
 
-# Synchronous function to read data, compatible with async event loops
 def read_data():
     try:
         loop = asyncio.get_running_loop()
-    except RuntimeError:  # No event loop running
+    except RuntimeError:
         loop = None
 
     if loop and loop.is_running():
@@ -91,7 +63,6 @@ def read_data():
 
     return all_data, total_cyber9_reports
 
-# Function to count files in a directory
 def count_files_in_directory(directory):
     try:
         items = os.listdir(directory)
@@ -101,43 +72,35 @@ def count_files_in_directory(directory):
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         return None
-    
+
 def detect_anomalies(df):
-    # Ensure required columns are present
     required_cols = ['TOTPACKETS', 'TOTDATA_MB', 'UNIQUE_CONNECTIONS']
     for col in required_cols:
         if col not in df.columns:
             logger.error(f"Required column {col} for anomaly detection is missing.")
-            return pd.DataFrame()  # Return empty DataFrame if required columns are missing
+            return pd.DataFrame()
 
-    # Log data types of required columns
     for col in required_cols:
         logger.info(f"Data type of {col}: {df[col].dtype}")
 
-    # Ensure the columns are numeric
     try:
         df[required_cols] = df[required_cols].apply(pd.to_numeric, errors='coerce')
     except Exception as e:
         logger.error(f"Error converting required columns to numeric: {e}")
-        return pd.DataFrame()  # Return empty DataFrame if conversion fails
+        return pd.DataFrame()
 
-    # Check for missing values
     if df[required_cols].isnull().any().any():
         logger.error("Missing values found in required columns.")
-        return pd.DataFrame()  # Return empty DataFrame if there are missing values
+        return pd.DataFrame()
 
-    # Select features for the model
     features = df[required_cols]
 
-    # Train Isolation Forest
     iso_forest = IsolationForest(contamination=0.01)
     df['ANOMALY_IF'] = iso_forest.fit_predict(features)
 
-    # Identify anomalies
     anomalies = df[df['ANOMALY_IF'] == -1]
     return anomalies
 
-# Function to create visualizations from the data
 def create_visualizations(all_data, total_cyber9_reports):
     try:
         start_time = time.time()
@@ -146,31 +109,19 @@ def create_visualizations(all_data, total_cyber9_reports):
             logger.error("No data available to create visualizations.")
             return (go.Figure(),) * 13
 
-        # Dynamically set MAX_ROWS based on the total number of records
-        MAX_ROWS = len(all_data)
-        logger.info(f"Setting MAX_ROWS to {MAX_ROWS}")
-
-        df = pd.DataFrame(all_data).head(MAX_ROWS)
+        df = pd.DataFrame(all_data).head(len(all_data))
         if df.empty:
             logger.error("No valid data in DataFrame.")
             return (go.Figure(),) * 13
 
-        logger.info(f"DataFrame head:\n{df.head()}")
+        logger.debug(f"DataFrame head:\n{df.head()}")
         logger.info(f"Data reading process completed in {time.time() - start_time:.2f} seconds.")
 
-        # Ensure all required columns are present
-        for col in required_columns:
-            if col not in df.columns:
-                df[col] = 0
-        logger.info(f"DataFrame with required columns:\n{df.head()}")
-
-        # Ensure TOTDATA is a string before using .str accessor
         df["TOTDATA"] = df["TOTDATA"].astype(str)
         df["TOTDATA_MB"] = pd.to_numeric(df["TOTDATA"].str.replace(" MB", ""), errors='coerce').fillna(0)
 
         custom_colorscale = [(0, "red"), (0.33, "yellow"), (0.67, "green"), (1, "blue")]
 
-        # Create various visualizations
         total_packets = df["TOTPACKETS"].sum()
         fig_indicator_packets = go.Figure(
             go.Indicator(
@@ -226,6 +177,12 @@ def create_visualizations(all_data, total_cyber9_reports):
         logger.info(f"Pie chart created in {time.time() - start_time:.2f} seconds.")
 
         logger.info("Processing hourly activity data...")
+        required_hourly_columns = [
+            "12AM", "1AM", "2AM", "3AM", "4AM", "5AM", "6AM", "7AM",
+            "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM",
+            "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM",
+        ]
+
         for col in required_hourly_columns:
             logger.debug(f"Processing column {col} for hourly activity...")
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
@@ -267,6 +224,10 @@ def create_visualizations(all_data, total_cyber9_reports):
         logger.info(f"Hourly activity heatmap created in {time.time() - start_time:.2f} seconds.")
 
         logger.info("Processing daily activity data...")
+        required_daily_columns = [
+            "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
+        ]
+
         for col in required_daily_columns:
             logger.debug(f"Processing column {col} for daily activity...")
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
@@ -419,10 +380,8 @@ def create_visualizations(all_data, total_cyber9_reports):
         df['CONNECTION'] = df['SRCIP'] + '-' + df['DSTIP'] + '-' + df['SRCPORT'].astype(str) + '-' + df['DSTPORT'].astype(str)
         df['UNIQUE_CONNECTIONS'] = df['CONNECTION'].nunique()
 
-        # Detect anomalies
         anomalies = detect_anomalies(df)
 
-        # Add new figure for anomalies
         fig_anomalies = px.scatter(
             anomalies,
             x='SRCIP',
@@ -452,5 +411,5 @@ def create_visualizations(all_data, total_cyber9_reports):
             fig_anomalies
         )
     except Exception as e:
-        logger.error(f"Error creating visualizations: {e}")
+        logger.error(f"Error creating visualizations: {e}", exc_info=True)
         return (go.Figure(),) * 13

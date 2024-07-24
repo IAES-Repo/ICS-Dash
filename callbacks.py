@@ -1,37 +1,41 @@
+from dash.dependencies import Input, Output, State
+from cache_config import get_visualizations
+import dash
 import logging
-from data_processing import read_data, create_visualizations
-from cache_config import cache
-import plotly.graph_objects as go
 
-# Set up logger
 logger = logging.getLogger(__name__)
 
-# Cache the result of this function
-@cache.memoize(timeout=3600)  # Cache timeout in seconds, adjust as needed
-def get_cached_data():
-    try:
-        data, total_cyber9_reports = read_data()  # Read the data from the source
-        return data, total_cyber9_reports
-    except Exception as e:
-        logger.error(f"Error getting cached data: {e}")  # Log any errors encountered
-        return None, 0  # Return default values in case of error
+def register_callbacks(app):
+    @app.callback(
+        [
+            Output("indicator-packets", "figure"),
+            Output("indicator-data-points", "figure"),
+            Output("indicator-cyber-reports", "figure"),
+            Output("treemap_source_destination_protocol", "figure"),
+            Output("pie-chart", "figure"),
+            Output("hourly-heatmap", "figure"),
+            Output("daily-heatmap", "figure"),
+            Output("sankey-diagram", "figure"),
+            Output("sankey-heatmap-diagram", "figure"),
+            Output("protocol-pie-chart", "figure"),
+            Output("parallel-categories", "figure"),
+            Output("stacked-area", "figure"),
+            Output("anomalies-scatter", "figure"),
+            Output('new-data-available', 'data')
+        ],
+        [Input("interval-component", "n_intervals"),
+         Input('new-data-available', 'data')]
+    )
+    def update_graphs(n_intervals, new_data_available):
+        logger.info(f"Update graphs called with n_intervals: {n_intervals}, new_data_available: {new_data_available}")
+        if new_data_available:
+            logger.info("Processing new data...")
+            figs = get_visualizations()
+            logger.info(f"Figures obtained: {figs}")
+            with app.server.app_context():
+                app.server.config['NEW_DATA_AVAILABLE'] = False  # Reset the flag to False
+            return figs + [False]  # Reset the new data flag to False
+        else:
+            logger.info("No new data available to process.")
+        return dash.no_update
 
-# Cache the result of this function
-@cache.memoize(timeout=3600)  # Cache timeout in seconds, adjust as needed
-def get_visualizations():
-    try:
-        data, total_cyber9_reports = get_cached_data()  # Get cached data
-        return create_visualizations(data, total_cyber9_reports)  # Create visualizations
-    except Exception as e:
-        logger.error(f"Error getting visualizations: {e}")  # Log any errors encountered
-        return [go.Figure()] * 13  # Return a list of empty figures in case of error
-
-# Function to update graphs periodically, intended to be used as a callback
-def update_graphs(n_intervals):
-    logger.debug(f"update_graphs called with n_intervals={n_intervals}")  # Debug log for function call
-    try:
-        figs = get_visualizations()  # Get cached visualizations
-        return figs
-    except Exception as e:
-        logger.error(f"Error updating graphs: {e}")  # Log any errors encountered
-        return [go.Figure()] * 13  # Return a list of empty figures in case of error

@@ -3,8 +3,7 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import logging
-from cache_config import cache, update_cache
-from callbacks import update_graphs, get_cached_data, get_visualizations
+from cache_config import cache, update_cache, get_visualizations
 from layouts import (
     overview_layout,
     top10_layout,
@@ -13,7 +12,9 @@ from layouts import (
     protocol_analysis_layout,
     data_flow_layout
 )
-from watchdog_handler import start_watchdog  # Import the watchdog handler
+from watchdog_handler import start_watchdog
+from flask import Flask
+from callbacks import register_callbacks  # Import the callback registration function
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,22 +24,25 @@ logger = logging.getLogger(__name__)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
+# Initialize the Flask server
+server = Flask(__name__)
+server.config['NEW_DATA_AVAILABLE'] = False  # Define the new_data_available attribute
+
 # Initialize the Dash app
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=server, suppress_callback_exceptions=True)
 
 # Initialize cache with the server
 cache.init_app(app.server)
 
-def initialize_cache():
-    logger.info("Populating cache with initial data...")
-    data, total_cyber9_reports = get_cached_data()
-    figs = get_visualizations()
-    logger.info("Cache initialized successfully.")
-
-# Define the app layout
 app.layout = html.Div(
     [
         dcc.Location(id='url', refresh=False),
+        dcc.Interval(
+            id='interval-component',
+            interval=600*1000,  # Update every 10 minutes for faster debugging
+            n_intervals=0
+        ),
+        dcc.Store(id='new-data-available', data=False),  # Hidden component to track new data
         html.Div(
             [
                 html.Nav(
@@ -153,8 +157,10 @@ app.layout = html.Div(
     ]
 )
 
-# Callback to update the page content based on the URL
-@app.callback(Output('page-content', 'children'), [Input('url', 'pathname')])
+@app.callback(
+    Output('page-content', 'children'),
+    [Input('url', 'pathname')]
+)
 def display_page(pathname):
     if pathname == '/top10s':
         return top10_layout
@@ -169,38 +175,20 @@ def display_page(pathname):
     else:
         return overview_layout
 
-# Register the callback function for updating the graphs
-app.callback(
-    [
-        Output("indicator-packets", "figure"),
-        Output("indicator-data-points", "figure"),
-        Output("indicator-cyber-reports", "figure"),
-        Output("treemap_source_destination_protocol", "figure"),
-        Output("pie-chart", "figure"),
-        Output("hourly-heatmap", "figure"),
-        Output("daily-heatmap", "figure"),
-        Output("sankey-diagram", "figure"),
-        Output("sankey-heatmap-diagram", "figure"),
-        Output("protocol-pie-chart", "figure"),
-        Output("parallel-categories", "figure"),
-        Output("stacked-area", "figure"),
-        Output("anomalies-scatter", "figure"),
-    ],
-    [Input("interval-component", "n_intervals")]
-)(update_graphs)
+# Register callbacks from callbacks.py
+register_callbacks(app)
 
-# Start the watchdog only once in the main process
+# Initialize the cache with the initial visualizations
+update_cache()
+logger.info("Initial cache update completed.")
+
+watchdog_started = False
+
 if __name__ == "__main__":
-    try:
+    if not watchdog_started:
         logger.info("Starting the application...")
-
-        logger.info("Running cache initialization and watchdog setup...")
-        initialize_cache()
+        output_file = "/home/iaes/iaesDash/source/jsondata/fm1/output/data.json"
         directory_to_watch = "/home/iaes/iaesDash/source/jsondata/fm1/output"
-        start_watchdog(directory_to_watch, app.server)
-        #logger.info(f"Started watching directory: {directory_to_watch}")
-
-        logger.info("Running the server")
-        app.run_server(host="0.0.0.0", port=8050, debug=True)  # Set debug to False
-    except Exception as e:
-        logger.error(f"Error running the server: {e}")
+        start_watchdog(directory_to_watch, app.server, output_file)
+        logger.info("Initializing the server")
+    app.run_server(host="0.0.0.0", port=8050, debug=False)
