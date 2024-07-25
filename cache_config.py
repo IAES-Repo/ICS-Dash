@@ -1,7 +1,29 @@
 from flask_caching import Cache
 from data_processing import read_data, create_visualizations
-import logging
 import plotly.graph_objects as go
+import logging
+from colorlog import ColoredFormatter
+
+# Configure colorlog
+formatter = ColoredFormatter(
+    "%(log_color)s%(levelname)s:%(name)s:%(message)s",
+    datefmt=None,
+    reset=True,
+    log_colors={
+        'DEBUG': 'purple',
+        'INFO': 'green',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'red,bg_white',
+    }
+)
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, handlers=[handler])
+logger = logging.getLogger(__name__)
 
 # Initialize Cache
 cache = Cache(config={
@@ -9,8 +31,6 @@ cache = Cache(config={
     'CACHE_DIR': 'cache-directory',
     'CACHE_DEFAULT_TIMEOUT': 600  # Set default timeout to 10 mins
 })
-
-logger = logging.getLogger(__name__)
 
 def invalidate_cache():
     logger.info("Invalidating cache...")

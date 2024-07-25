@@ -15,9 +15,27 @@ from layouts import (
 from watchdog_handler import start_watchdog
 from flask import Flask
 from callbacks import register_callbacks  # Import the callback registration function
+from colorlog import ColoredFormatter
+
+# Configure colorlog
+formatter = ColoredFormatter(
+    "%(log_color)s%(levelname)s:%(name)s:%(message)s",
+    datefmt=None,
+    reset=True,
+    log_colors={
+        'DEBUG': 'cyan',
+        'INFO': 'blue',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'red,bg_white',
+    }
+)
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, handlers=[handler])
 logger = logging.getLogger(__name__)
 
 # Suppress Werkzeug logs
@@ -26,7 +44,6 @@ log.setLevel(logging.ERROR)
 
 # Initialize the Flask server
 server = Flask(__name__)
-server.config['NEW_DATA_AVAILABLE'] = False  # Define the new_data_available attribute
 
 # Initialize the Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=server, suppress_callback_exceptions=True)
@@ -42,7 +59,6 @@ app.layout = html.Div(
             interval=600*1000,  # Update every 10 minutes for faster debugging
             n_intervals=0
         ),
-        dcc.Store(id='new-data-available', data=False),  # Hidden component to track new data
         html.Div(
             [
                 html.Nav(
@@ -182,13 +198,10 @@ register_callbacks(app)
 update_cache()
 logger.info("Initial cache update completed.")
 
-watchdog_started = False
-
 if __name__ == "__main__":
-    if not watchdog_started:
-        logger.info("Starting the application...")
-        output_file = "/home/iaes/iaesDash/source/jsondata/fm1/output/data.json"
-        directory_to_watch = "/home/iaes/iaesDash/source/jsondata/fm1/output"
-        start_watchdog(directory_to_watch, app.server, output_file)
-        logger.info("Initializing the server")
+    logger.info("Starting the application...")
+    output_file = "/home/iaes/iaesDash/source/jsondata/fm1/output/data.json"
+    directory_to_watch = "/home/iaes/iaesDash/source/jsondata/fm1/output"
+    start_watchdog(directory_to_watch, app.server, output_file)
+    logger.info("Initializing the server")
     app.run_server(host="0.0.0.0", port=8050, debug=False)

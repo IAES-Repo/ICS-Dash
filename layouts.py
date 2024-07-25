@@ -2,8 +2,27 @@ from dash import dcc, html
 from data_processing import create_visualizations, read_data
 import plotly.graph_objects as go
 import logging
+from colorlog import ColoredFormatter
 
-# Set up logger
+# Configure colorlog
+formatter = ColoredFormatter(
+    "%(log_color)s%(levelname)s:%(name)s:%(message)s",
+    datefmt=None,
+    reset=True,
+    log_colors={
+        'DEBUG': 'cyan',
+        'INFO': 'blue',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'red,bg_white',
+    }
+)
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, handlers=[handler])
 logger = logging.getLogger(__name__)
 
 try:

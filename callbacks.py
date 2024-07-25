@@ -1,8 +1,28 @@
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output
 from cache_config import get_visualizations
 import dash
 import logging
+from colorlog import ColoredFormatter
 
+# Configure colorlog
+formatter = ColoredFormatter(
+    "%(log_color)s%(levelname)s:%(name)s:%(message)s",
+    datefmt=None,
+    reset=True,
+    log_colors={
+        'DEBUG': 'cyan',
+        'INFO': 'magenta',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'red,bg_white',
+    }
+)
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, handlers=[handler])
 logger = logging.getLogger(__name__)
 
 def register_callbacks(app):
@@ -20,22 +40,12 @@ def register_callbacks(app):
             Output("protocol-pie-chart", "figure"),
             Output("parallel-categories", "figure"),
             Output("stacked-area", "figure"),
-            Output("anomalies-scatter", "figure"),
-            Output('new-data-available', 'data')
+            Output("anomalies-scatter", "figure")
         ],
-        [Input("interval-component", "n_intervals"),
-         Input('new-data-available', 'data')]
+        [Input("interval-component", "n_intervals")]
     )
-    def update_graphs(n_intervals, new_data_available):
-        logger.info(f"Update graphs called with n_intervals: {n_intervals}, new_data_available: {new_data_available}")
-        if new_data_available:
-            logger.info("Processing new data...")
-            figs = get_visualizations()
-            logger.info(f"Figures obtained: {figs}")
-            with app.server.app_context():
-                app.server.config['NEW_DATA_AVAILABLE'] = False  # Reset the flag to False
-            return figs + [False]  # Reset the new data flag to False
-        else:
-            logger.info("No new data available to process.")
-        return dash.no_update
-
+    def update_graphs(n_intervals):
+        logger.info(f"Update graphs called with n_intervals: {n_intervals}")
+        figs = get_visualizations()
+        logger.info(f"Figures obtained")
+        return figs

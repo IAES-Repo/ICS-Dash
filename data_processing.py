@@ -9,6 +9,7 @@ import aiofiles
 import time
 from sklearn.ensemble import IsolationForest
 import numpy as np
+from colorlog import ColoredFormatter
 
 try:
     import orjson as json
@@ -18,7 +19,25 @@ except ImportError:
 DATA_FOLDER = "/home/iaes/iaesDash/source/jsondata/fm1/output"
 C9REPORTS_FOLDER = "/home/iaes/iaesDash/source/c9reports"
 
-logging.basicConfig(level=logging.INFO)
+# Configure colorlog
+formatter = ColoredFormatter(
+    "%(log_color)s%(levelname)s:%(name)s:%(message)s",
+    datefmt=None,
+    reset=True,
+    log_colors={
+        'DEBUG': 'cyan',
+        'INFO': 'yellow',
+        'WARNING': 'orange',
+        'ERROR': 'red',
+        'CRITICAL': 'red,bg_white',
+    }
+)
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, handlers=[handler])
 logger = logging.getLogger(__name__)
 
 async def read_json_file(filepath):
