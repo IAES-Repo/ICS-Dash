@@ -5,7 +5,7 @@ import logging
 from colorlog import ColoredFormatter
 
 # Configure colorlog
-formatter = ColoredFormatter(
+formatter_callbacks = ColoredFormatter(
     "%(log_color)s%(levelname)s:%(name)s:%(message)s",
     datefmt=None,
     reset=True,
@@ -18,11 +18,11 @@ formatter = ColoredFormatter(
     }
 )
 
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
+handler_callbacks = logging.StreamHandler()
+handler_callbacks.setFormatter(formatter_callbacks)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+logging.basicConfig(level=logging.INFO, handlers=[handler_callbacks])
 logger = logging.getLogger(__name__)
 
 def register_callbacks(app):

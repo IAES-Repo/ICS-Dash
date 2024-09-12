@@ -8,7 +8,7 @@ from threading import Timer, Lock
 from colorlog import ColoredFormatter
 
 # Configure colorlog
-formatter = ColoredFormatter(
+formatter_watchdog = ColoredFormatter(
     "%(log_color)s%(levelname)s:%(name)s:%(message)s",
     datefmt=None,
     reset=True,
@@ -21,11 +21,11 @@ formatter = ColoredFormatter(
     }
 )
 
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
+handler_watchdog = logging.StreamHandler()
+handler_watchdog.setFormatter(formatter_watchdog)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+logging.basicConfig(level=logging.INFO, handlers=[handler_watchdog])
 logger = logging.getLogger(__name__)
 
 class WatchdogHandler(FileSystemEventHandler):

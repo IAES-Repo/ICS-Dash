@@ -20,7 +20,7 @@ DATA_FOLDER = "/home/iaes/iaesDash/source/jsondata/fm1/output"
 C9REPORTS_FOLDER = "/home/iaes/iaesDash/source/c9reports"
 
 # Configure colorlog
-formatter = ColoredFormatter(
+formatter_data = ColoredFormatter(
     "%(log_color)s%(levelname)s:%(name)s:%(message)s",
     datefmt=None,
     reset=True,
@@ -33,11 +33,11 @@ formatter = ColoredFormatter(
     }
 )
 
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
+handler_data = logging.StreamHandler()
+handler_data.setFormatter(formatter_data)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+logging.basicConfig(level=logging.INFO, handlers=[handler_data])
 logger = logging.getLogger(__name__)
 
 async def read_json_file(filepath):

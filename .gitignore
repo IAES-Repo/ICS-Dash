@@ -3,9 +3,14 @@ jsondata/fm1
 jsondata/fm2
 jsondata/fm3
 
+__pycache__
+
 # Ignore files
 /startup.sh
 /example_visuals.py
 /stuff
 /bash
 /cache-directory/*
+
+# Ignore secrets
+.env

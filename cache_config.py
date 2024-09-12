@@ -1,11 +1,11 @@
 from flask_caching import Cache
 from data_processing import read_data, create_visualizations
-import plotly.graph_objects as go
 import logging
+import plotly.graph_objects as go
 from colorlog import ColoredFormatter
 
 # Configure colorlog
-formatter = ColoredFormatter(
+formatter_cache = ColoredFormatter(
     "%(log_color)s%(levelname)s:%(name)s:%(message)s",
     datefmt=None,
     reset=True,
@@ -18,18 +18,18 @@ formatter = ColoredFormatter(
     }
 )
 
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
+handler_cache = logging.StreamHandler()
+handler_cache.setFormatter(formatter_cache)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+logging.basicConfig(level=logging.INFO, handlers=[handler_cache])
 logger = logging.getLogger(__name__)
 
 # Initialize Cache
 cache = Cache(config={
     'CACHE_TYPE': 'filesystem',
     'CACHE_DIR': 'cache-directory',
-    'CACHE_DEFAULT_TIMEOUT': 600  # Set default timeout to 10 mins
+    'CACHE_DEFAULT_TIMEOUT': 3600  # Set default timeout to 1 hour
 })
 
 def invalidate_cache():
@@ -40,19 +40,15 @@ def invalidate_cache():
 def update_cache():
     logger.info("Updating cache...")
     try:
-        if not cache.get('cached_data'):
-            data, total_cyber9_reports = read_data()
-            cache.set('cached_data', data)
-            cache.set('total_cyber9_reports', total_cyber9_reports)
-            figs = create_visualizations(data, total_cyber9_reports)
-            cache.set('visualizations', figs)
-            logger.info("Cache updated successfully.")
-        else:
-            logger.info("Cache is already up-to-date.")
+        data, total_cyber9_reports = read_data()
+        cache.set('cached_data', data)
+        cache.set('total_cyber9_reports', total_cyber9_reports)
+        figs = create_visualizations(data, total_cyber9_reports)
+        cache.set('visualizations', figs)
+        logger.info("Cache updated successfully.")
     except Exception as e:
         logger.error(f"Error updating cache: {e}", exc_info=True)
 
-@cache.memoize(timeout=3600)
 def get_cached_data():
     try:
         data = cache.get('cached_data')
@@ -67,7 +63,6 @@ def get_cached_data():
         logger.error(f"Error getting cached data: {e}", exc_info=True)
         return None, 0
 
-@cache.memoize(timeout=3600)
 def get_visualizations():
     try:
         figs = cache.get('visualizations')
