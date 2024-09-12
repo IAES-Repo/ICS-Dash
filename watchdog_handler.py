@@ -1,87 +1,80 @@
+import time
+import os
 import logging
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from cache_config import update_cache, invalidate_cache
-import time
-import os
-from threading import Timer, Lock
-from colorlog import ColoredFormatter
+from cache_config import force_cache_update
+from threading import Lock, Timer
 
-# Configure colorlog
-formatter_watchdog = ColoredFormatter(
-    "%(log_color)s%(levelname)s:%(name)s:%(message)s",
-    datefmt=None,
-    reset=True,
-    log_colors={
-        'DEBUG': 'cyan',
-        'INFO': 'green',
-        'WARNING': 'yellow',
-        'ERROR': 'red',
-        'CRITICAL': 'red,bg_white',
-    }
-)
-
-handler_watchdog = logging.StreamHandler()
-handler_watchdog.setFormatter(formatter_watchdog)
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, handlers=[handler_watchdog])
 logger = logging.getLogger(__name__)
 
-class WatchdogHandler(FileSystemEventHandler):
+class FileChangeHandler:
     def __init__(self, app, output_file):
         self.app = app
         self.output_file = output_file
+        self.last_size = self.get_file_size()
+        self.last_mtime = self.get_file_mtime()
         self.processing = False
-        self.debounce_timer = None
         self.lock = Lock()
-        super().__init__()
+        self.timer = None
 
-    def debounce(self, event):
+    def get_file_size(self):
+        return os.path.getsize(self.output_file) if os.path.exists(self.output_file) else 0
+
+    def get_file_mtime(self):
+        return os.path.getmtime(self.output_file) if os.path.exists(self.output_file) else 0
+
+    def check_file_changes(self):
+        if not os.path.exists(self.output_file):
+            logger.warning(f"File does not exist: {self.output_file}")
+            return
+
+        current_size = self.get_file_size()
+        current_mtime = self.get_file_mtime()
+
         with self.lock:
             if self.processing:
-                logger.info("Debounce skipped: Already processing")
                 return
 
-            self.processing = True
-            logger.info(f"Debounce processing started for file: {event.src_path}")
+            if current_size != self.last_size or current_mtime != self.last_mtime:
+                logger.info(f"Change detected in {self.output_file}")
+                logger.info(f"Size changed: {self.last_size} -> {current_size}")
+                logger.info(f"Modification time changed: {self.last_mtime} -> {current_mtime}")
+                
+                self.last_size = current_size
+                self.last_mtime = current_mtime
+                
+                # Cancel any existing timer
+                if self.timer:
+                    self.timer.cancel()
+                
+                # Set a new timer for 30 seconds
+                logger.info("Starting 30-second wait before processing...")
+                self.processing = True
+                self.timer = Timer(30, self.process_changes)
+                self.timer.start()
 
-        time.sleep(30)  # Sleep outside the lock to avoid holding the lock for too long
-
-        with self.app.app_context():
-            try:
-                with self.lock:
-                    if os.path.getsize(event.src_path) > 0:
-                        logger.info("Valid file size detected, updating cache...")
-                        invalidate_cache()
-                        update_cache()
-                    else:
-                        logger.warning(f"File {event.src_path} is empty, retrying in 1 second...")
-                        time.sleep(1)
-                        if os.path.getsize(event.src_path) > 0:
-                            invalidate_cache()
-                            update_cache()
-                        else:
-                            logger.error(f"File {event.src_path} is still empty after retry.")
-            except Exception as e:
-                logger.error(f"Error updating cache on file modification: {e}")
-            finally:
-                with self.lock:
-                    self.processing = False
-
-    def on_modified(self, event):
-        if not event.is_directory and event.src_path == self.output_file:
-            logger.info(f"File modified: {event.src_path}")
+    def process_changes(self):
+        try:
+            logger.info("30-second wait completed. Processing changes...")
+            with self.app.app_context():
+                logger.info("Forcing cache update")
+                force_cache_update()
+            
+            logger.info("File processing and cache update completed")
+        except Exception as e:
+            logger.error(f"Error processing file changes: {e}", exc_info=True)
+        finally:
             with self.lock:
-                if self.debounce_timer:
-                    self.debounce_timer.cancel()
-                self.debounce_timer = Timer(2, self.debounce, [event])
-                self.debounce_timer.start()
-                logger.info(f"Debounce timer started for {event.src_path}")
+                self.processing = False
 
 def start_watchdog(directory_to_watch, app, output_file):
-    event_handler = WatchdogHandler(app, output_file)
-    observer = Observer()
-    observer.schedule(event_handler, directory_to_watch, recursive=True)
-    observer.start()
-    logger.info(f"Started watching directory: {directory_to_watch}")
+    handler = FileChangeHandler(app, output_file)
+    logger.info(f"Started watching file: {output_file}")
+
+    try:
+        while True:
+            handler.check_file_changes()
+            time.sleep(10)  # Check every 10 seconds
+    except KeyboardInterrupt:
+        logger.info("Watchdog stopped")

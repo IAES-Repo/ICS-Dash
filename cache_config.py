@@ -3,6 +3,7 @@ from data_processing import read_data, create_visualizations
 import logging
 import plotly.graph_objects as go
 from colorlog import ColoredFormatter
+import time
 
 # Configure colorlog
 formatter_cache = ColoredFormatter(
@@ -32,18 +33,30 @@ cache = Cache(config={
     'CACHE_DEFAULT_TIMEOUT': 3600  # Set default timeout to 1 hour
 })
 
+is_first_run = True
+
+def initialize_cache():
+    global is_first_run
+    if is_first_run:
+        logger.info("First run detected. Initializing cache with fresh data...")
+        update_cache()
+        is_first_run = False
+        logger.info("Cache initialized with fresh data.")
+    else:
+        logger.info("Not first run. Using existing cache if available.")
+
 def invalidate_cache():
     logger.info("Invalidating cache...")
-    cache.clear()
+    cache.delete('cached_data')
+    cache.delete('visualizations')
     logger.info("Cache invalidated.")
 
 def update_cache():
     logger.info("Updating cache...")
     try:
         data, total_cyber9_reports = read_data()
-        cache.set('cached_data', data)
-        cache.set('total_cyber9_reports', total_cyber9_reports)
         figs = create_visualizations(data, total_cyber9_reports)
+        cache.set('cached_data', {'data': data, 'total_cyber9_reports': total_cyber9_reports, 'timestamp': time.time()})
         cache.set('visualizations', figs)
         logger.info("Cache updated successfully.")
     except Exception as e:
@@ -51,14 +64,12 @@ def update_cache():
 
 def get_cached_data():
     try:
-        data = cache.get('cached_data')
-        total_cyber9_reports = cache.get('total_cyber9_reports')
-        if data is None or total_cyber9_reports is None:
-            logger.info("Cached data not found, reading data...")
-            data, total_cyber9_reports = read_data()
-            cache.set('cached_data', data)
-            cache.set('total_cyber9_reports', total_cyber9_reports)
-        return data, total_cyber9_reports
+        cached_data = cache.get('cached_data')
+        if cached_data is None:
+            logger.info("Cached data not found, reading fresh data...")
+            update_cache()
+            cached_data = cache.get('cached_data')
+        return cached_data['data'], cached_data['total_cyber9_reports']
     except Exception as e:
         logger.error(f"Error getting cached data: {e}", exc_info=True)
         return None, 0
@@ -75,3 +86,9 @@ def get_visualizations():
     except Exception as e:
         logger.error(f"Error getting visualizations: {e}", exc_info=True)
         return [go.Figure()] * 13
+
+def force_cache_update():
+    logger.info("Forcing cache update...")
+    invalidate_cache()
+    update_cache()
+    logger.info("Cache update completed.")

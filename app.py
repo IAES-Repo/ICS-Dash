@@ -9,7 +9,7 @@ from flask import Flask, redirect, url_for, request, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from passlib.hash import pbkdf2_sha256
-from cache_config import cache
+from cache_config import cache, initialize_cache, get_visualizations
 from layouts import (
     overview_layout,
     top10_layout,
@@ -126,7 +126,7 @@ def register():
             error_message = 'Registration is only allowed for special email addresses'
 
         # Validate the registration code
-        elif registration_code != 'testcode314':
+        elif registration_code != os.getenv('AUTH_CODE'):
             error_message = 'Invalid registration code'
 
         # Check if both passwords match
@@ -284,8 +284,9 @@ def logout():
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=server, suppress_callback_exceptions=True)
 cache.init_app(app.server)
 
-# Print the URL for the CSS file
-print(app.get_asset_url('styles.css'))
+# Initialize the cache with fresh data on startup
+with server.app_context():
+    initialize_cache()
 
 # Dash layout and routing
 # Dash layout and routing
@@ -321,7 +322,13 @@ register_callbacks(app)
 if __name__ == "__main__":
     logger.info("Starting the application...")
     output_file = "/home/iaes/iaesDash/source/jsondata/fm1/output/data.json"
-    directory_to_watch = "/home/iaes/iaesDash/source/jsondata/fm1/output"
-    start_watchdog(directory_to_watch, app.server, output_file)
+    directory_to_watch = os.path.dirname(output_file)
+    
+    # Start the watchdog in a separate thread
+    import threading
+    watchdog_thread = threading.Thread(target=start_watchdog, args=(directory_to_watch, app.server, output_file))
+    watchdog_thread.daemon = True
+    watchdog_thread.start()
+    
     logger.info("Initializing the server")
     app.run_server(host="0.0.0.0", port=8051, debug=True, use_reloader=False)

@@ -18,38 +18,45 @@ class NetworkDataAggregator:
         self.temp_output_file = output_file + ".tmp"
         self.all_data = []
         self.file_data = {}
+        self.lock = threading.Lock()  # Added lock for thread safety
 
     def process_file(self, file_path):
-        try:
-            with open(file_path, 'rb') as file:
-                data = json.loads(file.read())
+        with self.lock:  # Ensure thread-safe file processing
+            try:
+                with open(file_path, 'rb') as file:
+                    data = json.loads(file.read())
 
-            if not isinstance(data, list):
-                print(f"Invalid data structure in file: {file_path}")
-                return
+                if not isinstance(data, list):
+                    print(f"Invalid data structure in file: {file_path}")
+                    return
 
-            if file_path not in self.file_data:
-                self.file_data[file_path] = []
+                # If this file is being processed for the first time
+                if file_path not in self.file_data:
+                    self.file_data[file_path] = []
 
-            if not self.all_data:
-                self.all_data.append(data[0])
+                # Initialize `all_data` if empty, adding the header
+                if not self.all_data:
+                    self.all_data.append(data[0])
 
-            self.file_data[file_path] = data[1:]
-            self.all_data.extend(data[1:])
+                # Update `file_data` and append to `all_data`
+                self.file_data[file_path] = data[1:]
+                self.all_data.extend(data[1:])
 
-        except json.JSONDecodeError as e:
-            print(f"JSON decode error in file {file_path}: {e}")
-        except Exception as e:
-            print(f"Error processing file {file_path}: {e}")
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error in file {file_path}: {e}")
+            except Exception as e:
+                print(f"Error processing file {file_path}: {e}")
 
     def batch_remove_files(self, file_paths):
-        for file_path in file_paths:
-            if file_path in self.file_data and self.file_data[file_path]:
-                self.all_data = [self.all_data[0]]
-                del self.file_data[file_path]
-
-                for entries in self.file_data.values():
-                    self.all_data.extend(entries)
+        with self.lock:  # Ensure thread-safe modification of data
+            for file_path in file_paths:
+                if file_path in self.file_data and self.file_data[file_path]:
+                    del self.file_data[file_path]
+                    
+            # Only rebuild self.all_data once after deleting all files
+            self.all_data = [self.all_data[0]]  # Retain the first element, if needed
+            for entries in self.file_data.values():
+                self.all_data.extend(entries)
 
     def write_output(self):
         if not self.all_data:
@@ -63,6 +70,7 @@ class NetworkDataAggregator:
 
         print(f"Output written to {self.output_file}")
         print(f"\033[33mTotal number of connections/data points: {len(self.all_data) - 1}\033[0m")
+
 
 class NetworkDataHandler(FileSystemEventHandler):
     def __init__(self, aggregator):
@@ -104,13 +112,16 @@ class NetworkDataHandler(FileSystemEventHandler):
             print(f"\033[31mBatch Processing Removal of {len(deleted_files)} Files\033[0m")
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Process all new files in parallel
             if new_files:
                 list(executor.map(self.aggregator.process_file, new_files))
 
+            # Process file deletions in parallel
             if deleted_files:
                 executor.submit(self.aggregator.batch_remove_files, deleted_files).result()
 
         self.aggregator.write_output()
+
 
 def process_existing_files(aggregator):
     file_list = [file_name for file_name in os.listdir(aggregator.watch_directory) if file_name.endswith('.json')]
@@ -119,6 +130,7 @@ def process_existing_files(aggregator):
         list(tqdm(executor.map(aggregator.process_file, [os.path.join(aggregator.watch_directory, file) for file in file_list]), total=len(file_list), desc="Processing files"))
 
     aggregator.write_output()
+
 
 if __name__ == "__main__":
     watch_directory = "/home/iaes/iaesDash/source/jsondata/fm1"
