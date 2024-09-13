@@ -100,10 +100,18 @@ def load_user(user_id):
 
 @server.route('/')
 def index():
-    if not current_user.is_authenticated:
-        return redirect(url_for('login'))  # Redirect to the login page if not logged in
+    # If user is authenticated, redirect to dashboard
+    if current_user.is_authenticated:
+        return redirect('/dashboard')
     else:
-        return redirect('/dashboard')  # Redirect to Dash app if logged in
+        return redirect('/login')
+
+
+@server.route('/dashboard')
+@login_required  # Ensure the user is logged in
+def dashboard_redirect():
+    # Render the dashboard layout or redirect to main Dash page
+    return app.index()  # Directly serve Dash app if logged in
 
 # Flask route for registration with a code
 @server.route('/register', methods=['GET', 'POST'])
@@ -170,8 +178,6 @@ def register():
         </html>
     '''
 
-
-
 # Flask route for login
 @server.route('/login', methods=['GET', 'POST'])
 def login():
@@ -181,6 +187,7 @@ def login():
         login_credential = request.form['username_or_email']
         password = request.form['password']
 
+        # Allow login via username or email
         if '@' in login_credential:
             user = User.query.filter_by(email=login_credential).first()
         else:
@@ -188,7 +195,11 @@ def login():
 
         if user and user.check_password(password):
             login_user(user)
-            return redirect('/')  # Redirect to the main app page after login
+
+            # Redirect to the page the user was trying to access, or default to dashboard
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('dashboard_redirect'))
+
         else:
             error_message = 'Invalid username/email or password'
 
@@ -216,8 +227,6 @@ def login():
         </body>
         </html>
     '''
-
-
 
 # Flask route for password reset
 @server.route('/reset-password', methods=['GET', 'POST'])

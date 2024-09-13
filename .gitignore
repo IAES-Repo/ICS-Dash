@@ -3,7 +3,7 @@ jsondata/fm1
 jsondata/fm2
 jsondata/fm3
 
-__pycache__
+/pycache/* 
 
 # Ignore files
 /startup.sh
