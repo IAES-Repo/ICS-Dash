@@ -6,11 +6,9 @@ jsondata/fm3
 /__pycache__/* 
 
 # Ignore files
-/startup.sh
-/example_visuals.py
-/stuff
 /bash
 /cache-directory/*
+/c9reports/*
 
 # Ignore secrets
 .env
