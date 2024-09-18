@@ -4,6 +4,7 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import logging
+import threading
 from dotenv import load_dotenv
 from flask import Flask, redirect, url_for, request, flash
 from flask_sqlalchemy import SQLAlchemy
@@ -334,10 +335,9 @@ if __name__ == "__main__":
     directory_to_watch = os.path.dirname(output_file)
     
     # Start the watchdog in a separate thread
-    import threading
     watchdog_thread = threading.Thread(target=start_watchdog, args=(directory_to_watch, app.server, output_file))
     watchdog_thread.daemon = True
     watchdog_thread.start()
     
     logger.info("Initializing the server")
-    app.run_server(host="0.0.0.0", port=8051, debug=True, use_reloader=False)
+    app.run_server(host="0.0.0.0", port=80, debug=False, use_reloader=False)
