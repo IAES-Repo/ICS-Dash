@@ -6,7 +6,6 @@ jsondata/fm3
 /__pycache__/* 
 
 # Ignore files
-/bash
 /cache-directory/*
 /c9reports/*
 
