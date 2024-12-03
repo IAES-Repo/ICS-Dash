@@ -331,7 +331,7 @@ register_callbacks(app)
 
 if __name__ == "__main__":
     logger.info("Starting the application...")
-    output_file = "/home/iaes/iaesDash/source/jsondata/fm1/output/data.json"
+    output_file = "/home/iaes/DiodeSensor/FM1/output/all_data.json"
     directory_to_watch = os.path.dirname(output_file)
     
     # Start the watchdog in a separate thread

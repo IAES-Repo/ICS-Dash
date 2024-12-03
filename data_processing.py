@@ -16,7 +16,8 @@ try:
 except ImportError:
     import json
 
-DATA_FOLDER = "/home/iaes/iaesDash/source/jsondata/fm1/output"
+DATA_FOLDER = "/home/iaes/DiodeSensor/FM1/output/"
+#DATA_FILE = "/home/iaes/DiodeSensor/FM1/output/all_data.json"
 C9REPORTS_FOLDER = "/home/iaes/iaesDash/source/c9reports"
 
 # Configure colorlog
@@ -53,7 +54,7 @@ async def read_all_files():
     all_data = []
     tasks = []
     for filename in os.listdir(DATA_FOLDER):
-        if filename.endswith(".json"):
+        if filename.endswith("all_data.json"):
             filepath = os.path.join(DATA_FOLDER, filename)
             tasks.append(read_json_file(filepath))
     results = await asyncio.gather(*tasks)
