@@ -38,19 +38,35 @@ class NetworkDataAggregator:
 
     def generate_all_data(self):
         """
-        Processes all files and writes a consolidated JSON file (`all_data.json`).
+        Processes files from the last 14 days and writes a consolidated newline-delimited JSON file (`all_data.json`).
         """
+        now = datetime.now()
+        cutoff_time = now - timedelta(days=14)
         output_path = os.path.join(self.output_folder, "all_data.json")
+
         with open(output_path, "w") as output_file:
             for entry in os.scandir(self.watch_directory):
                 if entry.is_file() and entry.name.endswith("jsonALLConnections.json"):
                     try:
-                        for item in self.process_file(entry.path):
-                            json.dump(item, output_file)
-                            output_file.write("\n")  # Newline-delimited JSON
-                    except Exception as e:
-                        print(f"\033[31mSkipping entire file {entry.name} due to error: {e}\033[0m")
-        print(f"\033[32mAll data written to {output_path}\033[0m")
+                        # Extract and parse timestamp
+                        timestamp_part = entry.name.rsplit("-jsonALLConnections.json", 1)[0]
+                        timestamp_str = "-".join(timestamp_part.split("-")[-6:])
+                        timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d-%H-%M-%S")
+                    except Exception:
+                        print(f"\033[33mSkipping file with invalid timestamp format: {entry.name}\033[0m")
+                        continue
+
+                    # Process files within the cutoff timeframe
+                    if timestamp >= cutoff_time:
+                        try:
+                            for item in self.process_file(entry.path):
+                                json.dump(item, output_file)
+                                output_file.write("\n")  # Write each item as a new line
+                        except Exception as e:
+                            print(f"\033[31mSkipping entire file {entry.name} due to error: {e}\033[0m")
+
+        print(f"\033[32mAll data from the last 14 days written to {output_path} in newline-delimited JSON format.\033[0m")
+
 
     def generate_timeframe_data(self, timeframe_key):
         """
