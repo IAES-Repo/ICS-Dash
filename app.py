@@ -331,7 +331,7 @@ register_callbacks(app)
 
 if __name__ == "__main__":
     logger.info("Starting the application...")
-    output_file = "/home/iaes/DiodeSensor/FM1/output/all_data.json"
+    output_file = "/home/iaes/DiodeSensor/FM1/output/1_hour_data.json"
     directory_to_watch = os.path.dirname(output_file)
     
     # Start the watchdog in a separate thread
@@ -340,4 +340,4 @@ if __name__ == "__main__":
     watchdog_thread.start()
     
     logger.info("Initializing the server")
-    app.run_server(host="0.0.0.0", port=80, debug=False, use_reloader=False)
+    app.run_server(host="0.0.0.0", port=8080, debug=False, use_reloader=False)

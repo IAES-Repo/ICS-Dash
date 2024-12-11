@@ -10,11 +10,8 @@ import time
 from sklearn.ensemble import IsolationForest
 import numpy as np
 from colorlog import ColoredFormatter
-
-try:
-    import orjson as json
-except ImportError:
-    import json
+import ijson
+import json
 
 DATA_FOLDER = "/home/iaes/DiodeSensor/FM1/output/"
 #DATA_FILE = "/home/iaes/DiodeSensor/FM1/output/all_data.json"
@@ -41,28 +38,41 @@ handler_data.setFormatter(formatter_data)
 logging.basicConfig(level=logging.INFO, handlers=[handler_data])
 logger = logging.getLogger(__name__)
 
+import ijson
+
 async def read_json_file(filepath):
-    async with aiofiles.open(filepath, mode='rb') as f:
-        content = await f.read()
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.error(f"Error reading {filepath}: {e}")
-            return None
+    async with aiofiles.open(filepath, mode='r') as f:
+        all_data = []
+        async for line in f:
+            line = line.strip()
+            if line.startswith("["):  # skip the header line
+                #logger.info("Skipping header line")
+                continue
+            if line:  # ensure non-empty lines
+                try:
+                    # parse the json incrementally using ijson
+                    parser = ijson.items(line, '')  # '' parses the entire json object
+                    for obj in parser:
+                        all_data.append(obj)
+                except Exception as e:
+                    logger.error(f"Error parsing json line: {line[:100]}... {e}")
+        return all_data
+
 
 async def read_all_files():
     all_data = []
     tasks = []
     for filename in os.listdir(DATA_FOLDER):
-        if filename.endswith("all_data.json"):
+        if filename.endswith("1_hour_data.json"):
             filepath = os.path.join(DATA_FOLDER, filename)
             tasks.append(read_json_file(filepath))
     results = await asyncio.gather(*tasks)
     for result in results:
-        if result and isinstance(result, list) and len(result) > 1:
-            all_data.extend(result[1:])
+        if result:
+            all_data.extend(result)
     logger.info(f"Total records loaded: {len(all_data)}")
     return all_data
+
 
 async def async_read_data():
     all_data = await read_all_files()
