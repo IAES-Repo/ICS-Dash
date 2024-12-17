@@ -11,14 +11,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from passlib.hash import pbkdf2_sha256
 from cache_config import cache, initialize_cache, get_visualizations
-from layouts import (
-    overview_layout,
-    top10_layout,
-    traffic_analysis_layout,
-    activity_patterns_layout,
-    protocol_analysis_layout,
-    data_flow_layout
-)
+import plotly.graph_objects as go
 from watchdog_handler import start_watchdog
 from callbacks import register_callbacks
 from colorlog import ColoredFormatter
@@ -34,8 +27,11 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-# Initialize the Flask server
+# Initialize Flask server
 server = Flask(__name__)
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure colorlog
 formatter = ColoredFormatter(
@@ -61,9 +57,6 @@ logger = logging.getLogger(__name__)
 # Suppress Werkzeug logs
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Fixed Database URI
 server.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
@@ -280,9 +273,6 @@ def reset_password():
         </body>
         </html>
     '''
-
-
-
 # Flask route for logout
 @server.route("/logout")
 @login_required
@@ -290,16 +280,26 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# Dash app setup
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=server, suppress_callback_exceptions=True)
-cache.init_app(app.server)
+# IMPORTANT: initialize cache AFTER creating server but BEFORE loading layouts
+cache.init_app(server, config={
+    'CACHE_TYPE': 'filesystem',
+    'CACHE_DIR': 'cache-directory',
+    'CACHE_DEFAULT_TIMEOUT': 3600
+})
 
-# Initialize the cache with fresh data on startup
 with server.app_context():
     initialize_cache()
 
-# Dash layout and routing
-# Dash layout and routing
+# Now import layouts after cache is initialized
+from layouts import (
+    overview_layout,
+    one_hour_layout,
+    twenty_four_hour_layout,
+    seven_days_layout,
+)
+
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=server, suppress_callback_exceptions=True)
+
 app.layout = html.Div(
     [
         dcc.Location(id='url', refresh=False),
@@ -311,33 +311,23 @@ app.layout = html.Div(
     Output('page-content', 'children'),
     [Input('url', 'pathname')]
 )
-@login_required  # This protects the Dash app pages
+@login_required
 def display_page(pathname):
-    if pathname == '/top10s':
-        return top10_layout
-    elif pathname == '/traffic-analysis':
-        return traffic_analysis_layout
-    elif pathname == '/activity-patterns':
-        return activity_patterns_layout
-    elif pathname == '/protocol-analysis':
-        return protocol_analysis_layout
-    elif pathname == '/data-flow':
-        return data_flow_layout
+    if pathname == '/1_hour_data':
+        return one_hour_layout
+    elif pathname == '/24_hours_data':
+        return twenty_four_hour_layout
+    elif pathname == '/7_days_data':
+        return seven_days_layout
     else:
         return overview_layout
 
-# Register callbacks
-register_callbacks(app)
-
 if __name__ == "__main__":
     logger.info("Starting the application...")
-    output_file = "/home/iaes/DiodeSensor/FM1/output/1_hour_data.json"
-    directory_to_watch = os.path.dirname(output_file)
-    
-    # Start the watchdog in a separate thread
-    watchdog_thread = threading.Thread(target=start_watchdog, args=(directory_to_watch, app.server, output_file))
+    directory_to_watch = "/home/iaes/DiodeSensor/FM1/output/"
+    watchdog_thread = threading.Thread(target=start_watchdog, args=(directory_to_watch, app.server))
     watchdog_thread.daemon = True
     watchdog_thread.start()
-    
+
     logger.info("Initializing the server")
-    app.run_server(host="0.0.0.0", port=8080, debug=False, use_reloader=False)
+    app.run_server(host="0.0.0.0", port=80, debug=False, use_reloader=False)

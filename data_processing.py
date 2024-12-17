@@ -14,10 +14,8 @@ import ijson
 import json
 
 DATA_FOLDER = "/home/iaes/DiodeSensor/FM1/output/"
-#DATA_FILE = "/home/iaes/DiodeSensor/FM1/output/all_data.json"
 C9REPORTS_FOLDER = "/home/iaes/iaesDash/source/c9reports"
 
-# Configure colorlog
 formatter_data = ColoredFormatter(
     "%(log_color)s%(levelname)s:%(name)s:%(message)s",
     datefmt=None,
@@ -34,63 +32,39 @@ formatter_data = ColoredFormatter(
 handler_data = logging.StreamHandler()
 handler_data.setFormatter(formatter_data)
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, handlers=[handler_data])
 logger = logging.getLogger(__name__)
-
-import ijson
 
 async def read_json_file(filepath):
     async with aiofiles.open(filepath, mode='r') as f:
         all_data = []
         async for line in f:
             line = line.strip()
-            if line.startswith("["):  # skip the header line
-                #logger.info("Skipping header line")
+            if line.startswith("["):
                 continue
-            if line:  # ensure non-empty lines
+            if line:
                 try:
-                    # parse the json incrementally using ijson
-                    parser = ijson.items(line, '')  # '' parses the entire json object
+                    parser = ijson.items(line, '')
                     for obj in parser:
                         all_data.append(obj)
                 except Exception as e:
                     logger.error(f"Error parsing json line: {line[:100]}... {e}")
         return all_data
 
-
-async def read_all_files():
-    all_data = []
-    tasks = []
-    for filename in os.listdir(DATA_FOLDER):
-        if filename.endswith("1_hour_data.json"):
-            filepath = os.path.join(DATA_FOLDER, filename)
-            tasks.append(read_json_file(filepath))
-    results = await asyncio.gather(*tasks)
-    for result in results:
-        if result:
-            all_data.extend(result)
-    logger.info(f"Total records loaded: {len(all_data)}")
-    return all_data
-
-
-async def async_read_data():
-    all_data = await read_all_files()
-    total_cyber9_reports = count_files_in_directory(C9REPORTS_FOLDER)
-    return all_data, total_cyber9_reports
-
-def read_data():
+def read_data(file_path):
+    # just read a single file now
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
 
     if loop and loop.is_running():
-        future = asyncio.run_coroutine_threadsafe(async_read_data(), loop)
-        all_data, total_cyber9_reports = future.result()
+        future = asyncio.run_coroutine_threadsafe(read_json_file(file_path), loop)
+        all_data = future.result()
     else:
-        all_data, total_cyber9_reports = asyncio.run(async_read_data())
+        all_data = asyncio.run(read_json_file(file_path))
 
+    total_cyber9_reports = count_files_in_directory(C9REPORTS_FOLDER)
     return all_data, total_cyber9_reports
 
 def count_files_in_directory(directory):
@@ -110,8 +84,8 @@ def detect_anomalies(df):
             logger.error(f"Required column {col} for anomaly detection is missing.")
             return pd.DataFrame()
 
-    for col in required_cols:
-        logger.info(f"Data type of {col}: {df[col].dtype}")
+    #for col in required_cols:
+    #    logger.info(f"Data type of {col}: {df[col].dtype}")
 
     try:
         df[required_cols] = df[required_cols].apply(pd.to_numeric, errors='coerce')
@@ -124,10 +98,8 @@ def detect_anomalies(df):
         return pd.DataFrame()
 
     features = df[required_cols]
-
     iso_forest = IsolationForest(contamination=0.01)
     df['ANOMALY_IF'] = iso_forest.fit_predict(features)
-
     anomalies = df[df['ANOMALY_IF'] == -1]
     return anomalies
 
@@ -139,7 +111,7 @@ def create_visualizations(all_data, total_cyber9_reports):
             logger.error("No data available to create visualizations.")
             return (go.Figure(),) * 13
 
-        df = pd.DataFrame(all_data).head(len(all_data))
+        df = pd.DataFrame(all_data)
         if df.empty:
             logger.error("No valid data in DataFrame.")
             return (go.Figure(),) * 13
@@ -154,42 +126,32 @@ def create_visualizations(all_data, total_cyber9_reports):
 
         total_packets = df["TOTPACKETS"].sum()
         fig_indicator_packets = go.Figure(
-            go.Indicator(
-                mode="number", value=total_packets, title={"text": "Total Packets"}
-            )
+            go.Indicator(mode="number", value=total_packets, title={"text": "Total Packets"})
         )
         fig_indicator_packets.update_layout(
             font=dict(color="white"), template="plotly_dark", height=250
         )
-        logger.info(f"Total packets indicator created in {time.time() - start_time:.2f} seconds.")
 
         total_data_points = len(df)
         fig_indicator_data_points = go.Figure(
-            go.Indicator(
-                mode="number",
-                value=total_data_points,
-                title={"text": "Total Connections"},
-            )
+            go.Indicator(mode="number", value=total_data_points, title={"text": "Total Connections"})
         )
         fig_indicator_data_points.update_layout(
             font=dict(color="white"), template="plotly_dark", height=250
         )
-        logger.info(f"Total connections indicator created in {time.time() - start_time:.2f} seconds.")
 
         fig_indicator_cyber_reports = go.Figure(
-            go.Indicator(
-                mode="number",
-                value=total_cyber9_reports,
-                title={"text": "Total Cyber9 Line Reports"},
-            )
+            go.Indicator(mode="number", value=total_cyber9_reports, title={"text": "Total Cyber9 Line Reports"})
         )
         fig_indicator_cyber_reports.update_layout(
             font=dict(color="white"), template="plotly_dark", height=250
         )
-        logger.info(f"Cyber9 reports indicator created in {time.time() - start_time:.2f} seconds.")
 
-        fig_treemap_src_dst_protocol = px.treemap(df, path=['SRCIP', 'DSTIP', 'PROTOCOL'], template="plotly_dark", values='TOTPACKETS', height=600, title='Source, Destination IP and Protocol Distribution')
-        logger.info(f"Treemap created in {time.time() - start_time:.2f} seconds.")
+        fig_treemap_src_dst_protocol = px.treemap(
+            df, path=['SRCIP', 'DSTIP', 'PROTOCOL'],
+            template="plotly_dark", values='TOTPACKETS', height=600,
+            title='Source, Destination IP and Protocol Distribution'
+        )
 
         df["TOTDATA"] = pd.to_numeric(df["TOTDATA_MB"], errors="coerce")
         total_data_by_srcip = df.groupby("SRCIP", as_index=False)["TOTDATA"].sum()
@@ -204,23 +166,16 @@ def create_visualizations(all_data, total_cyber9_reports):
             color_discrete_sequence=[c[1] for c in custom_colorscale],
             template="plotly_dark",
         )
-        logger.info(f"Pie chart created in {time.time() - start_time:.2f} seconds.")
 
-        logger.info("Processing hourly activity data...")
         required_hourly_columns = [
             "12AM", "1AM", "2AM", "3AM", "4AM", "5AM", "6AM", "7AM",
             "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM",
             "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM",
         ]
-
         for col in required_hourly_columns:
-            logger.debug(f"Processing column {col} for hourly activity...")
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
 
         hourly_activity = df[required_hourly_columns].sum().values.reshape(1, -1)
-        logger.debug(f"Hourly Activity Data Shape: {hourly_activity.shape}")
-        logger.debug(f"Hourly Activity Data:\n{hourly_activity}")
-
         fig4 = go.Figure(
             data=go.Heatmap(
                 z=hourly_activity,
@@ -247,25 +202,13 @@ def create_visualizations(all_data, total_cyber9_reports):
                 yaxis="y2",
             )
         )
-        fig4.update_layout(
-            yaxis2=dict(title="", overlaying="y", side="right", showgrid=False),
-            margin=dict(l=50, r=50, t=50, b=50),
-        )
-        logger.info(f"Hourly activity heatmap created in {time.time() - start_time:.2f} seconds.")
+        fig4.update_layout(yaxis2=dict(title="", overlaying="y", side="right", showgrid=False))
 
-        logger.info("Processing daily activity data...")
-        required_daily_columns = [
-            "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
-        ]
-
+        required_daily_columns = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
         for col in required_daily_columns:
-            logger.debug(f"Processing column {col} for daily activity...")
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
 
         daily_activity = df[required_daily_columns].sum().values.reshape(1, -1)
-        logger.debug(f"Daily Activity Data Shape: {daily_activity.shape}")
-        logger.debug(f"Daily Activity Data:\n{daily_activity}")
-
         fig5 = go.Figure(
             data=go.Heatmap(
                 z=daily_activity,
@@ -281,9 +224,7 @@ def create_visualizations(all_data, total_cyber9_reports):
             yaxis_title="Activity",
             template="plotly_dark",
         )
-        logger.info(f"Daily activity heatmap created in {time.time() - start_time:.2f} seconds.")
 
-        logger.info("Processing Sankey data...")
         sankey_data = df.groupby(["SRCIP", "DSTIP"], as_index=False)["TOTDATA_MB"].sum()
         top_connections = sankey_data.nlargest(10, "TOTDATA_MB")
         all_nodes = list(set(top_connections["SRCIP"]).union(set(top_connections["DSTIP"])))
@@ -306,10 +247,7 @@ def create_visualizations(all_data, total_cyber9_reports):
                 )
             ]
         )
-        fig_sankey.update_layout(
-            title_text="Top 10 IP Data Flows", font_size=10, template="plotly_dark"
-        )
-        logger.info(f"Sankey diagram created in {time.time() - start_time:.2f} seconds.")
+        fig_sankey.update_layout(title_text="Top 10 IP Data Flows", font_size=10, template="plotly_dark")
 
         top_connections["norm_data"] = (top_connections["TOTDATA_MB"] - top_connections["TOTDATA_MB"].min()) / (top_connections["TOTDATA_MB"].max() - top_connections["TOTDATA_MB"].min())
         colorscale = "jet"
@@ -360,7 +298,6 @@ def create_visualizations(all_data, total_cyber9_reports):
             yaxis=dict(showgrid=False, zeroline=False, visible=False),
             template="plotly_dark",
         )
-        logger.info(f"Sankey diagram with heatmap created in {time.time() - start_time:.2f} seconds.")
 
         fig_protocol_pie = px.pie(
             df,
@@ -371,7 +308,6 @@ def create_visualizations(all_data, total_cyber9_reports):
             template="plotly_dark",
         )
         fig_protocol_pie.update_traces(textinfo="percent+label")
-        logger.info(f"Protocol pie chart created in {time.time() - start_time:.2f} seconds.")
 
         fig_parallel = px.parallel_categories(
             df.nlargest(10, "TOTPACKETS"),
@@ -387,7 +323,6 @@ def create_visualizations(all_data, total_cyber9_reports):
             },
             title="Top 10 Connections by Total Packets",
         )
-        logger.info(f"Parallel categories plot created in {time.time() - start_time:.2f} seconds.")
 
         protocol_agg = df.groupby("PROTOCOL", as_index=False)[required_hourly_columns].sum()
         protocol_agg_melted = protocol_agg.melt(id_vars=["PROTOCOL"], var_name="Hour", value_name="Total Packets")
@@ -400,18 +335,12 @@ def create_visualizations(all_data, total_cyber9_reports):
             title="Network Traffic by Protocol (Hourly)",
             template="plotly_dark",
         )
-        fig_stacked_area.update_layout(
-            xaxis_title="Hour",
-            yaxis_title="Total Packets",
-            legend_title="Protocol",
-        )
-        logger.info(f"Stacked area chart created in {time.time() - start_time:.2f} seconds.")
+        fig_stacked_area.update_layout(xaxis_title="Hour", yaxis_title="Total Packets", legend_title="Protocol")
 
         df['CONNECTION'] = df['SRCIP'] + '-' + df['DSTIP'] + '-' + df['SRCPORT'].astype(str) + '-' + df['DSTPORT'].astype(str)
         df['UNIQUE_CONNECTIONS'] = df['CONNECTION'].nunique()
 
         anomalies = detect_anomalies(df)
-
         fig_anomalies = px.scatter(
             anomalies,
             x='SRCIP',
@@ -423,7 +352,6 @@ def create_visualizations(all_data, total_cyber9_reports):
             template='plotly_dark'
         )
         fig_anomalies.update_layout(height=600)
-        logger.info(f"Anomalies scatter plot created in {time.time() - start_time:.2f} seconds.")
 
         return (
             fig_indicator_packets,
@@ -443,3 +371,8 @@ def create_visualizations(all_data, total_cyber9_reports):
     except Exception as e:
         logger.error(f"Error creating visualizations: {e}", exc_info=True)
         return (go.Figure(),) * 13
+
+def read_and_process_file(file_path):
+    data, total_cyber9_reports = read_data(file_path=file_path)
+    figs = create_visualizations(data, total_cyber9_reports)
+    return data, figs, total_cyber9_reports

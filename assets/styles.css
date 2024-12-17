@@ -115,3 +115,26 @@ h1 {
 .auth-link:hover {
     text-decoration: underline;
 }
+
+.header-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 30px;
+    margin-bottom: 20px;
+    margin-top: 20px;
+}
+
+.header-links a {
+    color: #fff;
+    text-decoration: none;
+    padding: 10px 20px;
+    background-color: #5d0000;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+    font-weight: bold;
+}
+
+.header-links a:hover {
+    background-color: #820000;
+}
