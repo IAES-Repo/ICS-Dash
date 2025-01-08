@@ -51,8 +51,8 @@ def register_callbacks(app):
         if not figs or len(figs) < 13:
             figs = [go.Figure()] * 13
 
-        # Serialize figs to dicts (already done in cache_config.py)
-        figs_dict = figs  # Assuming get_visualizations returns list of dicts
+        # Serialize figs to dicts
+        figs_dict = [fig.to_dict() for fig in figs]
         logger.info(f"Figures fetched and serialized successfully for {datafile}.")
         return figs_dict
 

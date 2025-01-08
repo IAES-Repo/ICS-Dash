@@ -119,6 +119,11 @@ def create_visualizations(all_data, total_cyber9_reports):
         logger.debug(f"DataFrame head:\n{df.head()}")
         logger.info(f"Data reading process completed in {time.time() - start_time:.2f} seconds.")
 
+        # Handle missing values for cols
+        df['DSTIP'] = df['DSTIP'].fillna('Unknown')
+        df['SRCIP'] = df['SRCIP'].fillna('Unknown')
+        df['PROTOCOL'] = df['PROTOCOL'].fillna('Unknown')
+
         df["TOTDATA"] = df["TOTDATA"].astype(str)
         df["TOTDATA_MB"] = pd.to_numeric(df["TOTDATA"].str.replace(" MB", ""), errors='coerce').fillna(0)
 

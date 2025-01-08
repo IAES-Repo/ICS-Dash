@@ -7,6 +7,7 @@ from collections import deque
 import threading
 import time
 import os
+from threading import Lock
 
 # configure colorlog
 formatter_cache = ColoredFormatter(
@@ -36,6 +37,7 @@ cache = Cache(config={
 
 processing_queue = deque()
 queue_lock = threading.Lock()
+cache_lock = Lock()
 is_first_run = True
 data_folder = "/home/iaes/DiodeSensor/FM1/output/"
 
@@ -58,7 +60,7 @@ def enqueue_existing_files():
             file_size = os.path.getsize(file_path)
             files.append((file_path, file_size))
 
-    files.sort(key=lambda x: x[1], reverse=False) # emallest file to largest
+    files.sort(key=lambda x: x[1], reverse=False)  # smallest to largest
 
     with queue_lock:
         for file_path, sz in files:
@@ -72,19 +74,21 @@ def process_queue():
                 time.sleep(5)
                 continue
             file_path = processing_queue.popleft()
+            logger.debug(f"Dequeued file for processing: {file_path}")
 
         try:
             logger.info(f"Processing file: {file_path}")
             data, figs, total_reports = read_and_process_file(file_path)
-            cache.set(f'cached_data_{os.path.basename(file_path)}', {
-                'data': data,
-                'total_reports': total_reports,
-                'timestamp': time.time()
-            })
-            cache.set(f'visualizations_{os.path.basename(file_path)}', figs)
-            logger.info(f"File processed and cached: {file_path}")
+            with cache_lock:
+                cache.set(f'cached_data_{os.path.basename(file_path)}', {
+                    'data': data,
+                    'total_reports': total_reports,
+                    'timestamp': time.time()
+                })
+                cache.set(f'visualizations_{os.path.basename(file_path)}', figs)
+            logger.info(f"Cached visualizations for: {file_path}")
         except Exception as e:
-            logger.error(f"Error processing file {file_path}: {e}", exc_info=True)
+            logger.error(f"Failed to process {file_path}: {e}", exc_info=True)
 
 def start_processing_thread():
     processing_thread = threading.Thread(target=process_queue)
@@ -99,7 +103,8 @@ def invalidate_cache():
 def get_cached_data(filename):
     try:
         cache_key = f'cached_data_{filename}'
-        cached_data = cache.get(cache_key)
+        with cache_lock:
+            cached_data = cache.get(cache_key)
         if cached_data is None:
             logger.info(f"Cached data not found for {filename}, queuing for processing...")
             with queue_lock:
@@ -114,12 +119,14 @@ def get_visualizations(filename=None):
     try:
         if filename:
             cache_key = f'visualizations_{filename}'
-            figs = cache.get(cache_key)
+            with cache_lock:
+                figs = cache.get(cache_key)
             if figs is None:
                 logger.info(f"Visualizations not found in cache for {filename}, queuing for processing...")
                 with queue_lock:
                     processing_queue.append(os.path.join(data_folder, filename))
                 return [go.Figure()] * 13
+            logger.info(f"Visualizations retrieved from cache for {filename}.")
             return figs
         else:
             logger.error("Filename must be provided to get visualizations.")

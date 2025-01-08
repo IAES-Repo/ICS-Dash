@@ -3,11 +3,12 @@ jsondata/fm1
 jsondata/fm2
 jsondata/fm3
 
-/__pycache__/* 
+__pycache__/
 
 # Ignore files
 /cache-directory/*
 /c9reports/*
+/certs/*
 
 # Ignore secrets
 .env

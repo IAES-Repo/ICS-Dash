@@ -6,7 +6,7 @@ from dash.dependencies import Input, Output
 import logging
 import threading
 from dotenv import load_dotenv
-from flask import Flask, redirect, url_for, request, flash
+from flask import Flask, redirect, url_for, request, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from passlib.hash import pbkdf2_sha256
@@ -17,6 +17,7 @@ from callbacks import register_callbacks
 from colorlog import ColoredFormatter
 import signal
 import sys
+from OpenSSL import SSL
 
 # Signal handler to release the port on exit
 def signal_handler(sig, frame):
@@ -311,8 +312,10 @@ app.layout = html.Div(
     Output('page-content', 'children'),
     [Input('url', 'pathname')]
 )
-@login_required
 def display_page(pathname):
+    if not current_user.is_authenticated:
+        return redirect('/login')
+    
     if pathname == '/1_hour_data':
         return one_hour_layout
     elif pathname == '/24_hours_data':
@@ -322,12 +325,16 @@ def display_page(pathname):
     else:
         return overview_layout
 
+
 if __name__ == "__main__":
     logger.info("Starting the application...")
+
+    # Start the watchdog in a separate thread
     directory_to_watch = "/home/iaes/DiodeSensor/FM1/output/"
     watchdog_thread = threading.Thread(target=start_watchdog, args=(directory_to_watch, app.server))
     watchdog_thread.daemon = True
     watchdog_thread.start()
 
+    # Run the Dash app with SSL on 0.0.0.0:80 (Debug)
     logger.info("Initializing the server")
-    app.run_server(host="0.0.0.0", port=80, debug=False, use_reloader=False)
+    app.run_server(host=os.getenv('IP'), port=443, debug=False, use_reloader=False, ssl_context=('./certs/pem.pem', './certs/key.key'))
