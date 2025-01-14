@@ -33,19 +33,21 @@ def generate_layout_for_datafile(datafile_name, page_title, nav_links=None):
     if not figs or len(figs) < 13:
         figs = [go.Figure()] * 13
 
-    (fig_indicator_packets,
-     fig_indicator_data_points,
-     fig_indicator_cyber_reports,
-     fig_treemap_src_dst_protocol,
-     fig3,
-     fig4,
-     fig5,
-     fig_sankey,
-     fig_sankey_heatmap,
-     fig_protocol_pie,
-     fig_parallel,
-     fig_stacked_area,
-     fig_anomalies) = figs
+    (
+        fig_indicator_packets,
+        fig_indicator_data_points,
+        fig_indicator_cyber_reports,
+        fig_treemap_src_dst_protocol,
+        fig3,
+        fig4,
+        fig5,
+        fig_sankey,
+        fig_sankey_heatmap,
+        fig_protocol_pie,
+        fig_parallel,
+        fig_stacked_area,
+        fig_anomalies
+    ) = figs
 
     # build navigation bar if provided
     nav_bar = html.Div(
@@ -56,44 +58,70 @@ def generate_layout_for_datafile(datafile_name, page_title, nav_links=None):
         [
             nav_bar,
             html.H1(page_title, style={"color": "white", "margin": "16px 0"}),
+            # Hidden Store to keep track of last visual update
+            dcc.Store(id='last-visual-update', data={}),
+            # Graphs Layout
             html.Div(className="row", children=[
-                html.Div(className="col-md-4", children=[dcc.Graph(figure=fig_indicator_packets, className="card")]),
-                html.Div(className="col-md-4", children=[dcc.Graph(figure=fig_indicator_data_points, className="card")]),
-                html.Div(className="col-md-4", children=[dcc.Graph(figure=fig_indicator_cyber_reports, className="card")]),
-            ]),
-            html.Div(className="row", children=[
-                html.Div(className="col-md-12", children=[
-                    dcc.Graph(figure=fig_treemap_src_dst_protocol, className="card")
+                html.Div(className="col-md-4", children=[
+                    dcc.Graph(id="indicator-packets", figure=fig_indicator_packets, className="card")
+                ]),
+                html.Div(className="col-md-4", children=[
+                    dcc.Graph(id="indicator-data-points", figure=fig_indicator_data_points, className="card")
+                ]),
+                html.Div(className="col-md-4", children=[
+                    dcc.Graph(id="indicator-cyber-reports", figure=fig_indicator_cyber_reports, className="card")
                 ]),
             ]),
             html.Div(className="row", children=[
-                html.Div(className="col-md-6", children=[dcc.Graph(figure=fig3, className="card")]),
-                html.Div(className="col-md-6", children=[dcc.Graph(figure=fig4, className="card")]),
+                html.Div(className="col-md-12", children=[
+                    dcc.Graph(id="treemap_source_destination_protocol", figure=fig_treemap_src_dst_protocol, className="card")
+                ]),
             ]),
             html.Div(className="row", children=[
-                html.Div(className="col-md-6", children=[dcc.Graph(figure=fig5, className="card")]),
-                html.Div(className="col-md-6", children=[dcc.Graph(figure=fig_sankey, className="card")]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="pie-chart", figure=fig3, className="card")
+                ]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="hourly-heatmap", figure=fig4, className="card")
+                ]),
             ]),
             html.Div(className="row", children=[
-                html.Div(className="col-md-6", children=[dcc.Graph(figure=fig_sankey_heatmap, className="card")]),
-                html.Div(className="col-md-6", children=[dcc.Graph(figure=fig_protocol_pie, className="card")]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="daily-heatmap", figure=fig5, className="card")
+                ]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="sankey-diagram", figure=fig_sankey, className="card")
+                ]),
             ]),
             html.Div(className="row", children=[
-                html.Div(className="col-md-6", children=[dcc.Graph(figure=fig_parallel, className="card")]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="sankey-heatmap-diagram", figure=fig_sankey_heatmap, className="card")
+                ]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="protocol-pie-chart", figure=fig_protocol_pie, className="card")
+                ]),
             ]),
             html.Div(className="row", children=[
-                html.Div(className="col-md-12", children=[dcc.Graph(figure=fig_stacked_area, className="card")]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="parallel-categories", figure=fig_parallel, className="card")
+                ]),
             ]),
             html.Div(className="row", children=[
-                html.Div(className="col-md-12", children=[dcc.Graph(figure=fig_anomalies, className="card")]),
+                html.Div(className="col-md-12", children=[
+                    dcc.Graph(id="stacked-area", figure=fig_stacked_area, className="card")
+                ]),
+            ]),
+            html.Div(className="row", children=[
+                html.Div(className="col-md-12", children=[
+                    dcc.Graph(id="anomalies-scatter", figure=fig_anomalies, className="card")
+                ]),
             ]),
         ]
     )
 
 # now define specific layouts using this function
 overview_layout = html.Div([
-    dcc.Interval(id='interval-component', interval=600*1000, n_intervals=0),
-    dcc.Store(id='new-data-available', data=False),
+    dcc.Interval(id='interval-component', interval=600*1000, n_intervals=0),  # 10 minutes
     generate_layout_for_datafile(
         'all_data.json',
         "Overview (14 Days)",

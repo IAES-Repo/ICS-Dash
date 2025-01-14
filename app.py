@@ -18,6 +18,7 @@ from colorlog import ColoredFormatter
 import signal
 import sys
 from OpenSSL import SSL
+from flask_socketio import SocketIO
 
 # Signal handler to release the port on exit
 def signal_handler(sig, frame):
@@ -291,6 +292,9 @@ cache.init_app(server, config={
 with server.app_context():
     initialize_cache()
 
+# Initialize SocketIO
+socketio = SocketIO(server, cors_allowed_origins="*")
+
 # Now import layouts after cache is initialized
 from layouts import (
     overview_layout,
@@ -300,6 +304,9 @@ from layouts import (
 )
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=server, suppress_callback_exceptions=True)
+
+# Register the callbacks with the Dash app
+register_callbacks(app)
 
 app.layout = html.Div(
     [
@@ -337,4 +344,4 @@ if __name__ == "__main__":
 
     # Run the Dash app with SSL on 0.0.0.0:80 (Debug)
     logger.info("Initializing the server")
-    app.run_server(host=os.getenv('IP'), port=443, debug=False, use_reloader=False, ssl_context=('./certs/pem.pem', './certs/key.key'))
+    socketio.run(server, host=os.getenv('IP'), port=443, debug=False, use_reloader=False, ssl_context=('./certs/pem.pem', './certs/key.key'))

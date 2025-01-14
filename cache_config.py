@@ -86,6 +86,8 @@ def process_queue():
                     'timestamp': time.time()
                 })
                 cache.set(f'visualizations_{os.path.basename(file_path)}', figs)
+                # Record the last update timestamp for this file
+                cache.set(f'last_update_timestamp_{os.path.basename(file_path)}', time.time())
             logger.info(f"Cached visualizations for: {file_path}")
         except Exception as e:
             logger.error(f"Failed to process {file_path}: {e}", exc_info=True)
@@ -139,7 +141,8 @@ def force_cache_update(changed_file=None):
     if changed_file:
         logger.info(f"Processing updated file: {changed_file}")
         with queue_lock:
-            processing_queue.append(changed_file)
+            processing_queue.append(os.path.join(data_folder, changed_file))
+        # No need to set cache_updated flag here since processing_queue handles it
     else:
         logger.info("Forcing cache update for all files...")
         invalidate_cache()

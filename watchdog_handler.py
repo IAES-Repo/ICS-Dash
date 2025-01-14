@@ -5,6 +5,7 @@ import os
 import logging
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from watchdog.events import FileSystemEvent
 from cache_config import force_cache_update
 from threading import Lock, Timer
 
@@ -23,6 +24,7 @@ class FileChangeHandler(FileSystemEventHandler):
 
     def scan_files(self):
         """Initialize file states for all files in the directory."""
+        logger.info("Scanning existing files in the directory to initialize states.")
         for filename in os.listdir(self.directory_to_watch):
             file_path = os.path.join(self.directory_to_watch, filename)
             if os.path.isfile(file_path) and filename.endswith('.json'):
@@ -30,6 +32,19 @@ class FileChangeHandler(FileSystemEventHandler):
                     "size": os.path.getsize(file_path),
                     "mtime": os.path.getmtime(file_path),
                 }
+                logger.debug(f"Initialized state for {file_path}: size={self.file_states[file_path]['size']}, mtime={self.file_states[file_path]['mtime']}")
+
+
+    def on_created(self, event):
+        if not event.is_directory and event.src_path.endswith('.json'):
+            logger.info(f"File created: {event.src_path}")
+            self.on_modified(event)
+
+    def on_moved(self, event):
+        if not event.is_directory and event.dest_path.endswith('.json'):
+            logger.info(f"File moved: {event.dest_path}")
+            # Treat the moved file as a modified file
+            self.on_modified(FileSystemEvent(event.dest_path))
 
     def on_modified(self, event):
         """Handle modified files."""
@@ -41,38 +56,44 @@ class FileChangeHandler(FileSystemEventHandler):
 
         # Skip non-json files
         if not filename.endswith('.json'):
+            logger.debug(f"Ignored modification for non-json file: {filename}")
             return
 
         current_size = os.path.getsize(file_path)
         current_mtime = os.path.getmtime(file_path)
 
-        if (file_path not in self.file_states or
-            current_size != self.file_states[file_path]["size"] or
-            current_mtime != self.file_states[file_path]["mtime"]):
+        previous_state = self.file_states.get(file_path, {})
+        previous_size = previous_state.get("size", 0)
+        previous_mtime = previous_state.get("mtime", 0)
+
+        if (current_size != previous_size) or (current_mtime != previous_mtime):
             logger.info(f"Change detected in {file_path}")
-            logger.info(f"Size changed: {self.file_states.get(file_path, {}).get('size', 0)} -> {current_size}")
-            logger.info(f"Modification time changed: {self.file_states.get(file_path, {}).get('mtime', 0)} -> {current_mtime}")
+            logger.info(f"Size changed: {previous_size} -> {current_size}")
+            logger.info(f"Modification time changed: {previous_mtime} -> {current_mtime}")
             self.file_states[file_path] = {"size": current_size, "mtime": current_mtime}
 
             # Cancel any existing timer
             if self.timer:
+                logger.debug("Existing timer found. Canceling it.")
                 self.timer.cancel()
 
-            # Process changes after a delay
-            logger.info("Starting 30-second wait before processing...")
-            self.timer = Timer(30, self.process_changes, args=(file_path,))
+            # Process changes after a short delay to ensure file write completion
+            logger.info("Starting 5-second wait before processing changes...")
+            self.timer = Timer(5, self.process_changes, args=(filename,))
             self.timer.start()
+        else:
+            logger.debug(f"No actual changes detected in {file_path}.")
 
-    def process_changes(self, changed_file):
+    def process_changes(self, changed_filename):
         """Process the changed file."""
         try:
-            logger.info("30-second wait completed. Processing changes...")
+            logger.info(f"Processing changes for file: {changed_filename}")
             with self.app.app_context():
-                logger.info(f"Processing file: {changed_file}")
-                force_cache_update(changed_file)
-            logger.info("File processing and cache update completed")
+                logger.info(f"Calling force_cache_update for {changed_filename}")
+                force_cache_update(changed_filename)
+            logger.info(f"Completed processing changes for {changed_filename}")
         except Exception as e:
-            logger.error(f"Error processing file changes: {e}", exc_info=True)
+            logger.error(f"Error processing changes for {changed_filename}: {e}", exc_info=True)
         finally:
             with self.lock:
                 self.processing = False
