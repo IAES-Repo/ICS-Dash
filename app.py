@@ -308,8 +308,13 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=se
 # Register the callbacks with the Dash app
 register_callbacks(app)
 
+
+# Add interval and store
 app.layout = html.Div(
     [
+        dcc.Interval(id='interval-component', interval=30_000, n_intervals=0),
+        dcc.Store(id='figs-store', data={}),
+        dcc.Store(id='last-visual-update', data={}),
         dcc.Location(id='url', refresh=False),
         html.Div(id='page-content')
     ]

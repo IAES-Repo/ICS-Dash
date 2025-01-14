@@ -1,15 +1,14 @@
-from flask_caching import Cache
-from data_processing import read_and_process_file
-import logging
-import plotly.graph_objects as go
-from colorlog import ColoredFormatter
-from collections import deque
+# cache_config.py
+
 import threading
 import time
 import os
-from threading import Lock
+import logging
+from flask_caching import Cache
+from colorlog import ColoredFormatter
+from data_processing import read_and_process_file
+from collections import defaultdict
 
-# configure colorlog
 formatter_cache = ColoredFormatter(
     "%(log_color)s%(levelname)s:%(name)s:%(message)s",
     datefmt=None,
@@ -35,116 +34,70 @@ cache = Cache(config={
     'CACHE_DEFAULT_TIMEOUT': 3600
 })
 
-processing_queue = deque()
-queue_lock = threading.Lock()
-cache_lock = Lock()
-is_first_run = True
-data_folder = "/home/iaes/DiodeSensor/FM1/output/"
+# track last updated times so dash doesn't keep re-fetching
+last_file_timestamp = {}
+file_locks = defaultdict(threading.Lock)
 
 def initialize_cache():
-    global is_first_run
-    if is_first_run:
-        logger.info("First run detected. Initializing cache with fresh data...")
-        enqueue_existing_files()
-        start_processing_thread()
-        is_first_run = False
-        logger.info("Cache initialized with fresh data.")
-    else:
-        logger.info("Not first run. Using existing cache if available.")
+    # on startup, just load existing .json files if you want
+    logger.info("Initializing cache fresh...")
+    # if you prefer to skip reading them all at startup, remove this
+    data_dir = "/home/iaes/DiodeSensor/FM1/output"
+    for filename in os.listdir(data_dir):
+        if filename.endswith('.json'):
+            logger.info(f"Loading {filename} into cache once...")
+            update_cache_for_file(filename)
 
-def enqueue_existing_files():
-    files = []
-    for file in os.listdir(data_folder):
-        if file.endswith('.json'):
-            file_path = os.path.join(data_folder, file)
-            file_size = os.path.getsize(file_path)
-            files.append((file_path, file_size))
+def update_cache_for_file(filename):
+    """ read data from changed file and store new figs in cache if updated """
+    file_path = os.path.join("/home/iaes/DiodeSensor/FM1/output", filename)
 
-    files.sort(key=lambda x: x[1], reverse=False)  # smallest to largest
+    # do per-file locking so we don't process duplicates concurrently
+    with file_locks[file_path]:
+        mod_time = os.path.getmtime(file_path)
+        prev_time = last_file_timestamp.get(filename, 0)
+        if mod_time <= prev_time:
+            logger.info(f"File {filename} didn't actually get newer. skipping.")
+            return
 
-    with queue_lock:
-        for file_path, sz in files:
-            processing_queue.append(file_path)
-            logger.info(f"Queued file for processing: {file_path} (size: {sz} bytes)")
-
-def process_queue():
-    while True:
-        with queue_lock:
-            if not processing_queue:
-                time.sleep(5)
-                continue
-            file_path = processing_queue.popleft()
-            logger.debug(f"Dequeued file for processing: {file_path}")
-
+        # read data, create figs
+        logger.info(f"Regenerating figs for {filename}")
         try:
-            logger.info(f"Processing file: {file_path}")
             data, figs, total_reports = read_and_process_file(file_path)
-            with cache_lock:
-                cache.set(f'cached_data_{os.path.basename(file_path)}', {
-                    'data': data,
-                    'total_reports': total_reports,
-                    'timestamp': time.time()
-                })
-                cache.set(f'visualizations_{os.path.basename(file_path)}', figs)
-                # Record the last update timestamp for this file
-                cache.set(f'last_update_timestamp_{os.path.basename(file_path)}', time.time())
-            logger.info(f"Cached visualizations for: {file_path}")
+            # store in cache
+            cache.set(f'cached_data_{filename}', {
+                'data': data,
+                'total_reports': total_reports,
+                'timestamp': mod_time,
+            })
+            cache.set(f'visualizations_{filename}', figs)
+            # update the time so your dash callbacks know it's fresh
+            cache.set(f'last_update_timestamp_{filename}', mod_time)
+
+            # remember it locally to skip re-process next time
+            last_file_timestamp[filename] = mod_time
+            logger.info(f"cache updated for {filename}")
         except Exception as e:
-            logger.error(f"Failed to process {file_path}: {e}", exc_info=True)
-
-def start_processing_thread():
-    processing_thread = threading.Thread(target=process_queue)
-    processing_thread.daemon = True
-    processing_thread.start()
-
-def invalidate_cache():
-    logger.info("Invalidating entire cache...")
-    cache.clear()
-    logger.info("Cache invalidated.")
+            logger.error(f"error reading and caching {filename}: {e}")
 
 def get_cached_data(filename):
-    try:
-        cache_key = f'cached_data_{filename}'
-        with cache_lock:
-            cached_data = cache.get(cache_key)
-        if cached_data is None:
-            logger.info(f"Cached data not found for {filename}, queuing for processing...")
-            with queue_lock:
-                processing_queue.append(os.path.join(data_folder, filename))
-            return None, 0
-        return cached_data['data'], cached_data['total_reports']
-    except Exception as e:
-        logger.error(f"Error getting cached data for {filename}: {e}", exc_info=True)
+    stuff = cache.get(f'cached_data_{filename}')
+    if not stuff:
+        # maybe queue a re-load if not found
+        logger.info(f"No cached data for {filename}. Forcing update...")
+        update_cache_for_file(filename)
+        stuff = cache.get(f'cached_data_{filename}')
+    if stuff is None:
         return None, 0
+    return stuff['data'], stuff['total_reports']
 
-def get_visualizations(filename=None):
-    try:
-        if filename:
-            cache_key = f'visualizations_{filename}'
-            with cache_lock:
-                figs = cache.get(cache_key)
-            if figs is None:
-                logger.info(f"Visualizations not found in cache for {filename}, queuing for processing...")
-                with queue_lock:
-                    processing_queue.append(os.path.join(data_folder, filename))
-                return [go.Figure()] * 13
-            logger.info(f"Visualizations retrieved from cache for {filename}.")
-            return figs
-        else:
-            logger.error("Filename must be provided to get visualizations.")
-            return [go.Figure()] * 13
-    except Exception as e:
-        logger.error(f"Error getting visualizations for {filename}: {e}", exc_info=True)
-        return [go.Figure()] * 13
-
-def force_cache_update(changed_file=None):
-    if changed_file:
-        logger.info(f"Processing updated file: {changed_file}")
-        with queue_lock:
-            processing_queue.append(os.path.join(data_folder, changed_file))
-        # No need to set cache_updated flag here since processing_queue handles it
-    else:
-        logger.info("Forcing cache update for all files...")
-        invalidate_cache()
-        enqueue_existing_files()
-    logger.info("Cache update completed.")
+def get_visualizations(filename):
+    figs = cache.get(f'visualizations_{filename}')
+    if not figs:
+        logger.info(f"No figs in cache for {filename}. forcing update...")
+        update_cache_for_file(filename)
+        figs = cache.get(f'visualizations_{filename}')
+    if not figs:
+        logger.warning(f"Still no figs for {filename} after update, returning empties.")
+        return []
+    return figs
