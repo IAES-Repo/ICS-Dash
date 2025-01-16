@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO, handlers=[handler_cache])
 logger = logging.getLogger(__name__)
 
 cache = Cache(config={
-    'CACHE_TYPE': 'filesystem',
+    'CACHE_TYPE': 'memcached',
     'CACHE_DIR': 'cache-directory',
     'CACHE_DEFAULT_TIMEOUT': 3600
 })

@@ -300,7 +300,7 @@ from layouts import (
     overview_layout,
     one_hour_layout,
     twenty_four_hour_layout,
-    seven_days_layout,
+    #seven_days_layout,
 )
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=server, suppress_callback_exceptions=True)
@@ -332,8 +332,8 @@ def display_page(pathname):
         return one_hour_layout
     elif pathname == '/24_hours_data':
         return twenty_four_hour_layout
-    elif pathname == '/7_days_data':
-        return seven_days_layout
+    #elif pathname == '/7_days_data':
+    #    return seven_days_layout
     else:
         return overview_layout
 

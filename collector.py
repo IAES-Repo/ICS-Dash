@@ -38,7 +38,7 @@ class NetworkDataAggregator:
 
     def generate_all_data(self):
         now = datetime.now()
-        cutoff_time = now - timedelta(days=14)
+        cutoff_time = now - timedelta(days=7)
         output_tmp_path = os.path.join(self.output_folder, "all_data.json.tmp")
         output_final_path = os.path.join(self.output_folder, "all_data.json")
 
@@ -60,14 +60,14 @@ class NetworkDataAggregator:
 
         # Atomic replace: now rename the tmp file to final
         os.replace(output_tmp_path, output_final_path)
-        print(f"\033[32mAll data from the last 14 days written to {output_final_path}.\033[0m")
+        print(f"\033[32mAll data from the last 7 days written to {output_final_path}.\033[0m")
 
     def generate_timeframe_data(self, timeframe_key):
         now = datetime.now()
         timeframes = {
             "1_hour": now - timedelta(hours=1),
             "24_hours": now - timedelta(hours=24),
-            "7_days": now - timedelta(days=7),
+            #"7_days": now - timedelta(days=7),
         }
         cutoff_time = timeframes[timeframe_key]
         output_tmp_path = os.path.join(self.output_folder, f"{timeframe_key}_data.json.tmp")
@@ -99,7 +99,7 @@ class NetworkDataHandler:
         self.last_updates = {
             "1_hour": None,
             "24_hours": None,
-            "7_days": None,
+            #"7_days": None,
         }
 
     def process_existing_files(self):
@@ -117,7 +117,7 @@ class NetworkDataHandler:
         for timeframe_key, interval in {
             "1_hour": 600,  # 10 minutes
             "24_hours": 3600,  # 1 hour
-            "7_days": 86400,  # 1 day
+            #"7_days": 86400,  # 1 day
         }.items():
             if (
                 not self.last_updates[timeframe_key]

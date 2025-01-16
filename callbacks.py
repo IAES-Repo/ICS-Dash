@@ -44,7 +44,7 @@ def register_callbacks(app):
             "/": 'all_data.json',
             "/1_hour_data": '1_hour_data.json',
             "/24_hours_data": '24_hours_data.json',
-            "/7_days_data": '7_days_data.json'
+            #"/7_days_data": '7_days_data.json'
         }
         datafile = path_map.get(pathname, 'all_data.json')
         logger.info(f"target datafile: {datafile}")

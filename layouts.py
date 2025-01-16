@@ -124,31 +124,31 @@ overview_layout = html.Div([
     dcc.Interval(id='interval-component', interval=600*1000, n_intervals=0),  # 10 minutes
     generate_layout_for_datafile(
         'all_data.json',
-        "Overview (14 Days)",
-        nav_links=[("1-Hour Data", "/1_hour_data"), ("24-Hours Data", "/24_hours_data"), ("7-Days Data", "/7_days_data")]
+        "Overview (7 Days)",
+        nav_links=[("1-Hour Data", "/1_hour_data"), ("24-Hours Data", "/24_hours_data")]
     )
 ])
 
 one_hour_layout = generate_layout_for_datafile(
     '1_hour_data.json',
     "1 Hour Data",
-    nav_links=[("Overview", "/"), ("24-Hours Data", "/24_hours_data"), ("7-Days Data", "/7_days_data")]
+    nav_links=[("Overview", "/"), ("24-Hours Data", "/24_hours_data")]
 )
 
 twenty_four_hour_layout = generate_layout_for_datafile(
     '24_hours_data.json',
     "24 Hours Data",
-    nav_links=[("Overview", "/"), ("1-Hour Data", "/1_hour_data"), ("7-Days Data", "/7_days_data")]
+    nav_links=[("Overview", "/"), ("1-Hour Data", "/1_hour_data")]
 )
 
 seven_days_layout = generate_layout_for_datafile(
-    '7_days_data.json',
-    "7 Days Data",
+    'all_data.json',
+    "Overview (7 Days)",
     nav_links=[("Overview", "/"), ("1-Hour Data", "/1_hour_data"), ("24-Hours Data", "/24_hours_data")]
 )
 
-fourteen_days_layout = generate_layout_for_datafile(
-    'all_data.json',
-    "Overview (14 days)",
-    nav_links=[("1-Hour Data", "/1_hour_data"), ("24-Hours Data", "/24_hours_data"), ("7-Days Data", "/7_days_data")]
-)
+#fourteen_days_layout = generate_layout_for_datafile(
+#    'all_data.json',
+#    "Overview (14 days)",
+#    nav_links=[("1-Hour Data", "/1_hour_data"), ("24-Hours Data", "/24_hours_data"), ("7-Days Data", "/7_days_data")]
+#)

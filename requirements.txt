@@ -25,3 +25,7 @@ scikit-learn==1.5.1
 tqdm==4.66.4
 tqdn==0.2.1
 watchdog==4.0.1
+pylibmc==1.6.3
+python-memcached==1.62
+
+
