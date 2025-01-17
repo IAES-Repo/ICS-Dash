@@ -1,6 +1,8 @@
+# layouts.py
+
 from dash import dcc, html
-from cache_config import get_visualizations
 import plotly.graph_objects as go
+
 import logging
 from colorlog import ColoredFormatter
 
@@ -22,133 +24,218 @@ handler.setFormatter(formatter)
 logging.basicConfig(level=logging.INFO, handlers=[handler])
 logger = logging.getLogger(__name__)
 
-def generate_layout_for_datafile(datafile_name, page_title, nav_links=None):
-    """Generate a layout for the given datafile.
-
-    datafile_name: str, e.g. 'all_data.json'
-    page_title: str, title for the page
-    nav_links: list of (text, href) tuples for navigation, e.g. [('1-Hour Data', '/1_hour_data'), ...]
-    """
-    figs = get_visualizations(datafile_name)
-    if not figs or len(figs) < 13:
-        figs = [go.Figure()] * 13
-
-    (
-        fig_indicator_packets,
-        fig_indicator_data_points,
-        fig_indicator_cyber_reports,
-        fig_treemap_src_dst_protocol,
-        fig3,
-        fig4,
-        fig5,
-        fig_sankey,
-        fig_sankey_heatmap,
-        fig_protocol_pie,
-        fig_parallel,
-        fig_stacked_area,
-        fig_anomalies
-    ) = figs
-
-    # build navigation bar if provided
-    nav_bar = html.Div(
-        [dcc.Link(text, href=href) for text, href in (nav_links or [])],
-        className="header-links"
-    )
-    return html.Div(
-        [
-            nav_bar,
-            html.H1(page_title, style={"color": "white", "margin": "16px 0"}),
-            # Hidden Store to keep track of last visual update
-            dcc.Store(id='last-visual-update', data={}),
-            # Graphs Layout
-            html.Div(className="row", children=[
-                html.Div(className="col-md-4", children=[
-                    dcc.Graph(id="indicator-packets", figure=fig_indicator_packets, className="card")
-                ]),
-                html.Div(className="col-md-4", children=[
-                    dcc.Graph(id="indicator-data-points", figure=fig_indicator_data_points, className="card")
-                ]),
-                html.Div(className="col-md-4", children=[
-                    dcc.Graph(id="indicator-cyber-reports", figure=fig_indicator_cyber_reports, className="card")
-                ]),
-            ]),
-            html.Div(className="row", children=[
-                html.Div(className="col-md-12", children=[
-                    dcc.Graph(id="treemap_source_destination_protocol", figure=fig_treemap_src_dst_protocol, className="card")
-                ]),
-            ]),
-            html.Div(className="row", children=[
-                html.Div(className="col-md-6", children=[
-                    dcc.Graph(id="pie-chart", figure=fig3, className="card")
-                ]),
-                html.Div(className="col-md-6", children=[
-                    dcc.Graph(id="hourly-heatmap", figure=fig4, className="card")
-                ]),
-            ]),
-            html.Div(className="row", children=[
-                html.Div(className="col-md-6", children=[
-                    dcc.Graph(id="daily-heatmap", figure=fig5, className="card")
-                ]),
-                html.Div(className="col-md-6", children=[
-                    dcc.Graph(id="sankey-diagram", figure=fig_sankey, className="card")
-                ]),
-            ]),
-            html.Div(className="row", children=[
-                html.Div(className="col-md-6", children=[
-                    dcc.Graph(id="sankey-heatmap-diagram", figure=fig_sankey_heatmap, className="card")
-                ]),
-                html.Div(className="col-md-6", children=[
-                    dcc.Graph(id="protocol-pie-chart", figure=fig_protocol_pie, className="card")
-                ]),
-            ]),
-            html.Div(className="row", children=[
-                html.Div(className="col-md-6", children=[
-                    dcc.Graph(id="parallel-categories", figure=fig_parallel, className="card")
-                ]),
-            ]),
-            html.Div(className="row", children=[
-                html.Div(className="col-md-12", children=[
-                    dcc.Graph(id="stacked-area", figure=fig_stacked_area, className="card")
-                ]),
-            ]),
-            html.Div(className="row", children=[
-                html.Div(className="col-md-12", children=[
-                    dcc.Graph(id="anomalies-scatter", figure=fig_anomalies, className="card")
-                ]),
-            ]),
-        ]
-    )
-
-# now define specific layouts using this function
+# ---- OVERVIEW (7 DAYS) LAYOUT ----
 overview_layout = html.Div([
-    dcc.Interval(id='interval-component', interval=600*1000, n_intervals=0),  # 10 minutes
-    generate_layout_for_datafile(
-        'all_data.json',
-        "Overview (7 Days)",
-        nav_links=[("1-Hour Data", "/1_hour_data"), ("24-Hours Data", "/24_hours_data")]
-    )
+    # interval + store for overview
+    dcc.Interval(id='overview-interval', interval=600*1000, n_intervals=0),
+    dcc.Store(id='overview-figs-store', data={}),
+    
+    html.Div(
+        [
+            dcc.Link("Last Hour", href="/1_hour_data"),
+            dcc.Link("Last 24 Hours", href="/24_hours_data"),
+        ],
+        className="header-links"
+    ),
+    html.H1("Overview (Last 7 Days)", style={"color": "white", "margin": "16px 0"}),
+
+    html.Div(className="row", children=[
+        html.Div(className="col-md-4", children=[
+            dcc.Graph(id="overview-indicator-packets", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-4", children=[
+            dcc.Graph(id="overview-indicator-data-points", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-4", children=[
+            dcc.Graph(id="overview-indicator-cyber-reports", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-12", children=[
+            dcc.Graph(id="overview-treemap", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="overview-pie-chart", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="overview-hourly-heatmap", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="overview-daily-heatmap", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="overview-sankey-diagram", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="overview-sankey-heatmap-diagram", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="overview-protocol-pie-chart", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="overview-parallel-categories", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-12", children=[
+            dcc.Graph(id="overview-stacked-area", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-12", children=[
+            dcc.Graph(id="overview-anomalies-scatter", figure=go.Figure(), className="card")
+        ]),
+    ]),
 ])
 
-one_hour_layout = generate_layout_for_datafile(
-    '1_hour_data.json',
-    "1 Hour Data",
-    nav_links=[("Overview", "/"), ("24-Hours Data", "/24_hours_data")]
-)
+# ---- 1-HOUR LAYOUT ----
+one_hour_layout = html.Div([
+    # interval + store for 1 hour data
+    dcc.Interval(id='1h-interval', interval=600*1000, n_intervals=0),
+    dcc.Store(id='1h-figs-store', data={}),
+    
+    html.Div(
+        [
+            dcc.Link("Overview", href="/"),
+            dcc.Link("Last 24 Hours", href="/24_hours_data"),
+        ],
+        className="header-links"
+    ),
+    html.H1("Last Hour", style={"color": "white", "margin": "16px 0"}),
 
-twenty_four_hour_layout = generate_layout_for_datafile(
-    '24_hours_data.json',
-    "24 Hours Data",
-    nav_links=[("Overview", "/"), ("1-Hour Data", "/1_hour_data")]
-)
+    html.Div(className="row", children=[
+        html.Div(className="col-md-4", children=[
+            dcc.Graph(id="1h-indicator-packets", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-4", children=[
+            dcc.Graph(id="1h-indicator-data-points", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-4", children=[
+            dcc.Graph(id="1h-indicator-cyber-reports", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-12", children=[
+            dcc.Graph(id="1h-treemap", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="1h-pie-chart", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="1h-hourly-heatmap", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="1h-daily-heatmap", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="1h-sankey-diagram", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="1h-sankey-heatmap-diagram", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="1h-protocol-pie-chart", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="1h-parallel-categories", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-12", children=[
+            dcc.Graph(id="1h-stacked-area", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-12", children=[
+            dcc.Graph(id="1h-anomalies-scatter", figure=go.Figure(), className="card")
+        ]),
+    ]),
+])
 
-seven_days_layout = generate_layout_for_datafile(
-    'all_data.json',
-    "Overview (7 Days)",
-    nav_links=[("Overview", "/"), ("1-Hour Data", "/1_hour_data"), ("24-Hours Data", "/24_hours_data")]
-)
+# ---- 24-HOURS LAYOUT ----
+twenty_four_hour_layout = html.Div([
+    # interval + store for 24 hour data
+    dcc.Interval(id='24h-interval', interval=600*1000, n_intervals=0),
+    dcc.Store(id='24h-figs-store', data={}),
+    
+    html.Div(
+        [
+            dcc.Link("Overview", href="/"),
+            dcc.Link("Last Hour", href="/1_hour_data"),
+        ],
+        className="header-links"
+    ),
+    html.H1("Last 24 Hours", style={"color": "white", "margin": "16px 0"}),
 
-#fourteen_days_layout = generate_layout_for_datafile(
-#    'all_data.json',
-#    "Overview (14 days)",
-#    nav_links=[("1-Hour Data", "/1_hour_data"), ("24-Hours Data", "/24_hours_data"), ("7-Days Data", "/7_days_data")]
-#)
+    html.Div(className="row", children=[
+        html.Div(className="col-md-4", children=[
+            dcc.Graph(id="24h-indicator-packets", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-4", children=[
+            dcc.Graph(id="24h-indicator-data-points", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-4", children=[
+            dcc.Graph(id="24h-indicator-cyber-reports", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-12", children=[
+            dcc.Graph(id="24h-treemap", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="24h-pie-chart", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="24h-hourly-heatmap", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="24h-daily-heatmap", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="24h-sankey-diagram", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="24h-sankey-heatmap-diagram", figure=go.Figure(), className="card")
+        ]),
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="24h-protocol-pie-chart", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-6", children=[
+            dcc.Graph(id="24h-parallel-categories", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-12", children=[
+            dcc.Graph(id="24h-stacked-area", figure=go.Figure(), className="card")
+        ]),
+    ]),
+    html.Div(className="row", children=[
+        html.Div(className="col-md-12", children=[
+            dcc.Graph(id="24h-anomalies-scatter", figure=go.Figure(), className="card")
+        ]),
+    ]),
+])

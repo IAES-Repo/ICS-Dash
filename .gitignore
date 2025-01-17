@@ -12,3 +12,8 @@ jsondata/fm3
 
 # Ignore secrets
 .env
+
+# Files
+
+create_codebase.py
+codebase.txt

@@ -61,7 +61,7 @@ def update_cache_for_file(filename):
             return
 
         # read data, create figs
-        logger.info(f"Regenerating figs for {filename}")
+        logger.info(f"Generating figs for {filename}")
         try:
             data, figs, total_reports = read_and_process_file(file_path)
             # store in cache

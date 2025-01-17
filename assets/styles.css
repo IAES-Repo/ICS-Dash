@@ -2,6 +2,7 @@
 body {
     background-color: #111111;
     font-family: "Montserrat", "Helvetica", "Open Sans", "Arial";
+    padding: 20px; /* add padding around the whole body */
 }
 
 .navbar {
