@@ -10,7 +10,7 @@ from flask import Flask, redirect, url_for, request, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from passlib.hash import pbkdf2_sha256
-from cache_config import cache, initialize_cache, get_visualizations
+from cache_config import cache, initialize_cache, get_visualizations, get_from_chunks, set_in_chunks
 import plotly.graph_objects as go
 from watchdog_handler import start_watchdog
 from callbacks import register_callbacks
@@ -19,6 +19,10 @@ import signal
 import sys
 from OpenSSL import SSL
 from flask_socketio import SocketIO
+import redis
+import math
+import pickle
+import zlib
 
 # Signal handler to release the port on exit
 def signal_handler(sig, frame):
@@ -284,9 +288,9 @@ def logout():
 
 # IMPORTANT: initialize cache AFTER creating server but BEFORE loading layouts
 cache.init_app(server, config={
-    'CACHE_TYPE': 'filesystem',
-    'CACHE_DIR': 'cache-directory',
-    'CACHE_DEFAULT_TIMEOUT': 3600
+    'CACHE_TYPE': 'redis',
+    'CACHE_DEFAULT_TIMEOUT': 3600,
+    'CACHE_REDIS_URL': 'redis://127.0.0.1:6379/0'
 })
 
 with server.app_context():
@@ -295,7 +299,7 @@ with server.app_context():
 # Initialize SocketIO
 socketio = SocketIO(server, cors_allowed_origins="*")
 
-# Now import layouts after cache is initialized
+# Import layouts after cache is initialized
 from layouts import (
     overview_layout,
     one_hour_layout,
@@ -304,6 +308,7 @@ from layouts import (
 )
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=server, suppress_callback_exceptions=True)
+
 
 # Register the callbacks with the Dash app
 register_callbacks(app)
@@ -349,4 +354,5 @@ if __name__ == "__main__":
 
     # Run the Dash app with SSL on 0.0.0.0:80 (Debug)
     logger.info("Initializing the server")
-    socketio.run(server, host=os.getenv('IP'), port=443, debug=False, use_reloader=False, ssl_context=('./certs/pem.pem', './certs/key.key'))
+    socketio.run(server, host=os.getenv('LOCAL_IP'), port=8443, debug=False, use_reloader=False, allow_unsafe_werkzeug=True, ssl_context=('./certs/pem.pem', './certs/key.key'))
+    
