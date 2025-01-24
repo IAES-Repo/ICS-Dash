@@ -2,7 +2,7 @@
 
 from dash import dcc, html
 import plotly.graph_objects as go
-
+from datetime import datetime, timedelta
 import logging
 from colorlog import ColoredFormatter
 
@@ -34,6 +34,7 @@ overview_layout = html.Div([
         [
             dcc.Link("Last Hour", href="/1_hour_data"),
             dcc.Link("Last 24 Hours", href="/24_hours_data"),
+            dcc.Link("Custom Search", href="/custom_data"),
         ],
         className="header-links"
     ),
@@ -106,6 +107,7 @@ one_hour_layout = html.Div([
         [
             dcc.Link("Overview", href="/"),
             dcc.Link("Last 24 Hours", href="/24_hours_data"),
+            dcc.Link("Custom Search", href="/custom_data"),
         ],
         className="header-links"
     ),
@@ -178,6 +180,7 @@ twenty_four_hour_layout = html.Div([
         [
             dcc.Link("Overview", href="/"),
             dcc.Link("Last Hour", href="/1_hour_data"),
+            dcc.Link("Custom Search", href="/custom_data"),
         ],
         className="header-links"
     ),
@@ -238,4 +241,125 @@ twenty_four_hour_layout = html.Div([
             dcc.Graph(id="24h-anomalies-scatter", figure=go.Figure(), className="card")
         ]),
     ]),
+])
+
+# Custom search layout
+custom_layout = html.Div([
+    dcc.Interval(id='custom-interval', interval=600*1000, n_intervals=0),
+    dcc.Interval(id='cleanup-interval', interval=3600*1000),  # 1 hour
+    dcc.Interval(id='custom-status-check', interval=1000),
+    html.Div(id='custom-status-alert'),
+    dcc.Store(id='cleanup-dummy'),
+    dcc.Store(id='custom-figs-store', data={}),
+    
+    html.Div(
+        [
+            dcc.Link("Overview", href="/"),
+            dcc.Link("Last Hour", href="/1_hour_data"),
+            dcc.Link("Last 24 Hours", href="/24_hours_data"),
+            dcc.Link("Custom Search", href="/custom_data"),
+        ],
+        className="header-links"
+    ),
+    html.H1("Custom Timeframe", style={"color": "white", "margin": "16px 0"}),
+    
+    html.Div([
+        dcc.DatePickerSingle(
+            id='start-date-picker',
+            min_date_allowed=datetime(2000, 1, 1),
+            max_date_allowed=datetime(2100, 12, 31),
+            initial_visible_month=datetime.now(),
+            date=datetime.now() - timedelta(days=1)
+        ),
+        dcc.Input(
+            id='start-time-input',
+            type='text',
+            placeholder='HH:MM:SS',
+            value='00:00:00',
+            pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$",
+            style={'margin-left': '10px', 'width': '100px'}
+        ),
+        dcc.DatePickerSingle(
+            id='end-date-picker',
+            min_date_allowed=datetime(2000, 1, 1),
+            max_date_allowed=datetime(2100, 12, 31),
+            initial_visible_month=datetime.now(),
+            date=datetime.now()
+        ),
+        dcc.Input(
+            id='end-time-input',
+            type='text',
+            placeholder='HH:MM:SS',
+            value='23:59:59',
+            style={'margin-left': '10px', 'width': '100px'}
+        ),
+        html.Button(
+            'Search',
+            id='search-button',
+            n_clicks=0,
+            style={'margin-left': '10px', 'padding': '5px 15px'}
+        )
+    ], style={'margin': '10px'}),
+    
+    # Add the missing container with the correct ID
+    html.Div(
+        id='custom-visuals-container',
+        children=[
+            html.Div(className="row", children=[
+                html.Div(className="col-md-4", children=[
+                    dcc.Graph(id="custom-indicator-packets", figure=go.Figure(), className="card")
+                ]),
+                html.Div(className="col-md-4", children=[
+                    dcc.Graph(id="custom-indicator-data-points", figure=go.Figure(), className="card")
+                ]),
+                html.Div(className="col-md-4", children=[
+                    dcc.Graph(id="custom-indicator-cyber-reports", figure=go.Figure(), className="card")
+                ]),
+            ]),
+            html.Div(className="row", children=[
+                html.Div(className="col-md-12", children=[
+                    dcc.Graph(id="custom-treemap", figure=go.Figure(), className="card")
+                ]),
+            ]),
+            html.Div(className="row", children=[
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="custom-pie-chart", figure=go.Figure(), className="card")
+                ]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="custom-hourly-heatmap", figure=go.Figure(), className="card")
+                ]),
+            ]),
+            html.Div(className="row", children=[
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="custom-daily-heatmap", figure=go.Figure(), className="card")
+                ]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="custom-sankey-diagram", figure=go.Figure(), className="card")
+                ]),
+            ]),
+            html.Div(className="row", children=[
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="custom-sankey-heatmap-diagram", figure=go.Figure(), className="card")
+                ]),
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="custom-protocol-pie-chart", figure=go.Figure(), className="card")
+                ]),
+            ]),
+            html.Div(className="row", children=[
+                html.Div(className="col-md-6", children=[
+                    dcc.Graph(id="custom-parallel-categories", figure=go.Figure(), className="card")
+                ]),
+            ]),
+            html.Div(className="row", children=[
+                html.Div(className="col-md-12", children=[
+                    dcc.Graph(id="custom-stacked-area", figure=go.Figure(), className="card")
+                ]),
+            ]),
+            html.Div(className="row", children=[
+                html.Div(className="col-md-12", children=[
+                    dcc.Graph(id="custom-anomalies-scatter", figure=go.Figure(), className="card")
+                ]),
+            ]),
+        ]
+    )
 ])

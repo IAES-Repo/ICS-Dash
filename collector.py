@@ -1,15 +1,14 @@
 import os
 import json
 import gc
-import ijson
 from datetime import datetime, timedelta
-import concurrent.futures
 import time
 import psutil
-
+import hashlib
+from collections import deque
+import threading
 
 def log_memory_usage():
-    """Log memory usage for debugging."""
     process = psutil.Process(os.getpid())
     print(f"\033[38;2;255;165;0mMemory usage: {process.memory_info().rss / 1024 ** 2:.2f} MB\033[0m")
 
@@ -17,134 +16,275 @@ class NetworkDataAggregator:
     def __init__(self, watch_directory, output_folder):
         self.watch_directory = watch_directory
         self.output_folder = output_folder
-
-        # Ensure the output folder exists
         os.makedirs(self.output_folder, exist_ok=True)
 
-    def process_file(self, file_path):
-        """
-        Processes a file and yields its data for further aggregation.
-        Skips invalid JSON files to ensure the script continues running.
-        """
-        try:
-            with open(file_path, "r") as file:
-                for item in ijson.items(file, "item"):
-                    try:
-                        yield item  # Yield each valid item
-                    except Exception as e:
-                        print(f"\033[31mSkipping invalid JSON entry in {file_path}: {e}\033[0m")
-        except Exception as e:
-            print(f"\033[31mSkipping entire file {file_path} due to error: {e}\033[0m")
-
-    def generate_all_data(self):
-        now = datetime.now()
-        cutoff_time = now - timedelta(days=7)
-        output_tmp_path = os.path.join(self.output_folder, "all_data.json.tmp")
-        output_final_path = os.path.join(self.output_folder, "all_data.json")
-
-        with open(output_tmp_path, "w") as output_file:
-            for entry in os.scandir(self.watch_directory):
-                if entry.is_file() and entry.name.endswith("jsonALLConnections.json"):
-                    try:
-                        timestamp_part = entry.name.rsplit("-jsonALLConnections.json", 1)[0]
-                        timestamp_str = "-".join(timestamp_part.split("-")[-6:])
-                        timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d-%H-%M-%S")
-                    except Exception:
-                        print(f"\033[33mSkipping file with invalid timestamp format: {entry.name}\033[0m")
-                        continue
-
-                    if timestamp >= cutoff_time:
-                        for item in self.process_file(entry.path):
-                            json.dump(item, output_file)
-                            output_file.write("\n")
-
-        # Atomic replace: now rename the tmp file to final
-        os.replace(output_tmp_path, output_final_path)
-        print(f"\033[32mAll data from the last 7 days written to {output_final_path}.\033[0m")
-
-    def generate_timeframe_data(self, timeframe_key):
-        now = datetime.now()
-        timeframes = {
-            "1_hour": now - timedelta(hours=1),
-            "24_hours": now - timedelta(hours=24),
-            #"7_days": now - timedelta(days=7),
+        # Define expected fields and their cleaning functions
+        self.field_cleaners = {
+            "PROTOCOL": lambda x: x.strip(),
+            "SRCIP": lambda x: x.strip(),
+            "DSTIP": lambda x: x.strip(),
+            "TOTPACKETS": lambda x: int(x) if str(x).isdigit() else 0,
+            "TOTDATA": lambda x: float(str(x).replace(" MB", "").strip()) if "MB" in str(x) else 0.0,
+            "SRCPORT": lambda x: x.strip(),
+            "DSTPORT": lambda x: x.strip()
         }
-        cutoff_time = timeframes[timeframe_key]
-        output_tmp_path = os.path.join(self.output_folder, f"{timeframe_key}_data.json.tmp")
-        output_final_path = os.path.join(self.output_folder, f"{timeframe_key}_data.json")
 
-        with open(output_tmp_path, "w") as output_file:
-            for entry in os.scandir(self.watch_directory):
-                if entry.is_file() and entry.name.endswith("jsonALLConnections.json"):
-                    try:
-                        timestamp_part = entry.name.rsplit("-jsonALLConnections.json", 1)[0]
-                        timestamp_str = "-".join(timestamp_part.split("-")[-6:])
-                        timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d-%H-%M-%S")
-                    except Exception:
-                        print(f"\033[33mSkipping file with invalid timestamp format: {entry.name}\033[0m")
-                        continue
+    def process_file(self, file_path):
+        """Process individual JSON files with header handling"""
+        try:
+            with open(file_path, "r") as f:
+                data = json.load(f)
+                
+                if not isinstance(data, list) or len(data) < 2:
+                    print(f"\033[33mInvalid format in {os.path.basename(file_path)}\033[0m")
+                    return []
 
-                    if timestamp >= cutoff_time:
-                        for item in self.process_file(entry.path):
-                            json.dump(item, output_file)
-                            output_file.write("\n")
+                # Validate header row
+                header = data[0]
+                if not isinstance(header, list) or len(header) < 20:
+                    print(f"\033[33mInvalid header in {os.path.basename(file_path)}\033[0m")
+                    return []
 
-        os.replace(output_tmp_path, output_final_path)
-        print(f"\033[32mTimeframe data for {timeframe_key} written to {output_final_path}\033[0m")
+                # Process records
+                return [self.clean_entry(entry) for entry in data[1:] if isinstance(entry, dict)]
+                
+        except json.JSONDecodeError:
+            print(f"\033[33mInvalid JSON in {os.path.basename(file_path)}\033[0m")
+            return []
+        except Exception as e:
+            print(f"\033[31mError processing {os.path.basename(file_path)}: {e}\033[0m")
+            return []
+        finally:
+            gc.collect()
 
+    def clean_entry(self, entry):
+        """Clean and validate individual data entries"""
+        cleaned = {}
+        for field, cleaner in self.field_cleaners.items():
+            try:
+                cleaned[field] = cleaner(entry.get(field, ""))
+            except Exception as e:
+                print(f"\033[33mError cleaning {field}: {e}\033[0m")
+                cleaned[field] = None
+        
+        # Clean time fields with validation
+        time_fields = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] + [
+            f"{h}{ampm}" for ampm in ["AM", "PM"] for h in ["12"] + [str(i) for i in range(1,12)]
+        ]
+        for field in time_fields:
+            try:
+                cleaned[field] = int(entry.get(field, 0))
+            except ValueError:
+                cleaned[field] = 0
+        
+        return cleaned
+
+    def generate_timeframe_data(self, timeframe_key, cutoff_time):
+        """Generate dataset for specific timeframe"""
+        output_path = os.path.join(self.output_folder, f"{timeframe_key}_data.json")
+        
+        # Use temporary file to prevent partial writes
+        temp_path = output_path + ".tmp"
+        processed_count = 0
+        
+        try:
+            with open(temp_path, "w") as output_file:
+                for entry in os.scandir(self.watch_directory):
+                    if entry.is_file() and entry.name.endswith("jsonALLConnections.json"):
+                        try:
+                            timestamp = self.extract_timestamp(entry.name)
+                            if timestamp >= cutoff_time:
+                                items = self.process_file(entry.path)
+                                for item in items:
+                                    output_file.write(json.dumps(item) + "\n")
+                                processed_count += len(items)
+                                gc.collect()
+                        except ValueError as e:
+                            print(f"\033[33mSkipping {entry.name}: {e}\033[0m")
+                            continue
+            
+            if processed_count > 0:
+                os.replace(temp_path, output_path)
+                print(f"\033[32mGenerated {timeframe_key} data with {processed_count} records\033[0m")
+            else:
+                print(f"\033[33mNo data found for {timeframe_key}, skipping file creation\033[0m")
+                os.remove(temp_path)
+                
+        except Exception as e:
+            print(f"\033[31mError generating {timeframe_key} data: {e}\033[0m")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    def extract_timestamp(self, filename):
+        """Extract timestamp from filename with validation"""
+        parts = filename.split("-")
+        try:
+            if len(parts) < 8:
+                raise ValueError(f"Invalid filename structure: {filename}")
+                
+            return datetime.strptime(
+                f"{parts[2]}-{parts[3]}-{parts[4]} {parts[5]}:{parts[6]}:{parts[7].split('_')[0]}", 
+                "%Y-%m-%d %H:%M:%S"
+            )
+        except Exception as e:
+            raise ValueError(f"Invalid timestamp in filename: {filename}") from e
+        
+    def generate_custom_dataset(self, start_datetime, end_datetime):
+        """Generate custom dataset between timestamps"""
+        timeframe_str = f"{start_datetime:%Y%m%d%H%M%S}_{end_datetime:%Y%m%d%H%M%S}"
+        filename_hash = hashlib.md5(timeframe_str.encode()).hexdigest()[:8]
+        output_path = os.path.join(self.output_folder, f"custom_{filename_hash}.json")
+        temp_path = output_path + ".tmp"
+        
+        if os.path.exists(output_path):
+            print(f"Using existing custom dataset: {output_path}")
+            return output_path
+        
+        print(f"Generating new custom dataset: {output_path}")
+        
+        json_files = []
+        for entry in os.scandir(self.watch_directory):
+            if entry.is_file() and entry.name.endswith("jsonALLConnections.json"):
+                try:
+                    file_datetime = self.extract_timestamp(entry.name)
+                    if start_datetime <= file_datetime <= end_datetime:
+                        json_files.append(entry.path)
+                except Exception as e:
+                    print(f"Skipping {entry.name}: {str(e)}")
+                    continue
+
+        all_data = []
+        for file_path in json_files:
+            try:
+                file_data = self.process_file(file_path)
+                if file_data:
+                    all_data.extend(file_data)
+                    print(f"Processed {len(file_data)} records from {os.path.basename(file_path)}")
+            except Exception as e:
+                print(f"\033[31mCritical error processing {file_path}: {e}\033[0m")
+        
+        if not all_data:
+            print("\033[31mNo valid data collected for custom timeframe\033[0m")
+            return None
+
+        try:
+            # Write as line-delimited JSON
+            with open(temp_path, "w") as f:
+                for entry in all_data:
+                    f.write(json.dumps(entry) + "\n")
+            
+            os.replace(temp_path, output_path)
+            return output_path
+        except Exception as e:
+            print(f"\033[31mError writing custom dataset: {e}\033[0m")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            return None
 
 class NetworkDataHandler:
     def __init__(self, aggregator):
         self.aggregator = aggregator
-        self.last_updates = {
-            "1_hour": None,
-            "24_hours": None,
-            #"7_days": None,
+        self.task_queue = deque()
+        self.lock = threading.Lock()
+        self.active_tasks = {}
+        self.timeframes = {
+            "all": timedelta(days=7),
+            "1_hour": timedelta(hours=1),
+            "24_hours": timedelta(hours=24)
         }
 
+    def add_custom_task(self, start_datetime, end_datetime):
+        timeframe_str = f"{start_datetime:%Y%m%d%H%M%S}_{end_datetime:%Y%m%d%H%M%S}"
+        filename_hash = hashlib.md5(timeframe_str.encode()).hexdigest()[:8]
+        task_id = f"custom_{filename_hash}"
+        
+        with self.lock:
+            if task_id not in self.active_tasks:
+                self.active_tasks[task_id] = {
+                    'status': 'pending',
+                    'filename': f"{task_id}.json",
+                    'created_at': datetime.now(),
+                    'message': None
+                }
+                self.task_queue.append(('custom', start_datetime, end_datetime, task_id))
+        
+        return task_id
+
+    def process_tasks(self):
+        while True:
+            # Clean up old tasks (older than 1 hour)
+            now = datetime.now()
+            with self.lock:
+                to_remove = [
+                    task_id for task_id, task in self.active_tasks.items()
+                    if (now - task['created_at']).total_seconds() > 3600
+                ]
+                for task_id in to_remove:
+                    del self.active_tasks[task_id]
+
+            if self.task_queue:
+                with self.lock:
+                    task = self.task_queue.popleft()
+                
+                if task[0] == 'custom':
+                    _, start, end, task_id = task
+                    try:
+                        with self.lock:
+                            self.active_tasks[task_id]['status'] = 'processing'
+                        
+                        result = self.aggregator.generate_custom_dataset(start, end)
+                        
+                        with self.lock:
+                            if result:
+                                self.active_tasks[task_id]['status'] = 'complete'
+                                self.active_tasks[task_id]['filename'] = os.path.basename(result)
+                            else:
+                                self.active_tasks[task_id]['status'] = 'failed'
+                                self.active_tasks[task_id]['message'] = 'No data found in timeframe'
+                    except Exception as e:
+                        with self.lock:
+                            self.active_tasks[task_id]['status'] = 'failed'
+                            self.active_tasks[task_id]['message'] = str(e)
+                    finally:
+                        gc.collect()
+            
+            time.sleep(2)
+
     def process_existing_files(self):
-        """
-        Processes all existing files in the watch directory and generates:
-        - `all_data.json`: consolidated data from all files.
-        - Timeframe-specific JSON files: `1_hour_data.json`, `24_hours_data.json`, `7_days_data.json`.
-        """
-        # Generate consolidated all_data.json
-        print("\033[36mGenerating all_data.json...\033[0m")
-        self.aggregator.generate_all_data()
-
-        # Generate timeframe-specific files
+        """Process standard timeframes"""
         now = datetime.now()
-        for timeframe_key, interval in {
-            "1_hour": 600,  # 10 minutes
-            "24_hours": 3600,  # 1 hour
-            #"7_days": 86400,  # 1 day
-        }.items():
-            if (
-                not self.last_updates[timeframe_key]
-                or (now - self.last_updates[timeframe_key]).seconds >= interval
-            ):
-                print(f"\033[36mUpdating {timeframe_key} data...\033[0m")
-                self.aggregator.generate_timeframe_data(timeframe_key)
-                self.last_updates[timeframe_key] = now
-
+        for timeframe, delta in self.timeframes.items():
+            cutoff = now - delta
+            try:
+                self.aggregator.generate_timeframe_data(timeframe, cutoff)
+            except Exception as e:
+                print(f"\033[31mError processing {timeframe} data: {e}\033[0m")
 
 if __name__ == "__main__":
-    watch_directory = "/home/iaes/DiodeSensor/FM1"
-    output_folder = "/home/iaes/DiodeSensor/FM1/output"
+    WATCH_DIR = "/home/iaes/DiodeSensor/FM1"
+    OUTPUT_DIR = "/home/iaes/DiodeSensor/FM1/output"
 
-    if not os.path.exists(watch_directory):
-        print(f"\033[31mWatch directory does not exist: {watch_directory}\033[0m")
-    else:
-        aggregator = NetworkDataAggregator(watch_directory, output_folder)
-        handler = NetworkDataHandler(aggregator)
+    aggregator = NetworkDataAggregator(WATCH_DIR, OUTPUT_DIR)
+    handler = NetworkDataHandler(aggregator)
 
-        try:
-            while True:
-                print("\033[36mStarting data processing...\033[0m")
-                handler.process_existing_files()
-                log_memory_usage()  # Log memory usage after processing
-                gc.collect()  # Force garbage collection sparingly
-                print("\033[36mData processing complete. Waiting for the next update...\033[0m")
-                time.sleep(600)  # Sleep for 10 minutes
-        except KeyboardInterrupt:
-            print("\033[31mTerminating the program.\033[0m")
+    # Start task processor in separate thread
+    task_thread = threading.Thread(target=handler.process_tasks, daemon=True)
+    task_thread.start()
+
+    try:
+        while True:
+            print("\033[36m--- Starting processing cycle ---\033[0m")
+            start_time = time.time()
+            
+            # Process standard timeframes
+            handler.process_existing_files()
+            
+            log_memory_usage()
+            gc.collect()
+            
+            sleep_time = max(600 - (time.time() - start_time), 60)
+            print(f"\033[36mCycle completed. Sleeping for {sleep_time:.1f}s\033[0m")
+            time.sleep(sleep_time)
+            
+    except KeyboardInterrupt:
+        print("\033[31mProcess terminated by user\033[0m")

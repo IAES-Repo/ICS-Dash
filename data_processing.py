@@ -35,37 +35,91 @@ handler_data.setFormatter(formatter_data)
 logging.basicConfig(level=logging.INFO, handlers=[handler_data])
 logger = logging.getLogger(__name__)
 
+required_hourly_columns = [
+    "12AM", "1AM", "2AM", "3AM", "4AM", "5AM", "6AM", "7AM",
+    "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM",
+    "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM",
+]
+
+required_daily_columns = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+
 async def read_json_file(filepath):
-    async with aiofiles.open(filepath, mode='r') as f:
-        all_data = []
-        async for line in f:
-            line = line.strip()
-            if line.startswith("["):
-                continue
-            if line:
+    """Process line-delimited JSON files with validation"""
+    all_data = []
+    try:
+        async with aiofiles.open(filepath, mode='r') as f:
+            async for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                
                 try:
-                    parser = ijson.items(line, '')
-                    for obj in parser:
-                        all_data.append(obj)
-                except Exception as e:
-                    logger.error(f"Error parsing json line: {line[:100]}... {e}")
-        return all_data
+                    # Parse JSON object
+                    item = json.loads(line)
+                    
+                    # Ensure we have a dictionary
+                    if not isinstance(item, dict):
+                        logger.debug(f"Skipping non-dictionary item: {line[:100]}...")
+                        continue
+                        
+                    # Set defaults for all required fields
+                    item.setdefault('DSTIP', 'Unknown')
+                    item.setdefault('SRCIP', 'Unknown')
+                    item.setdefault('PROTOCOL', 'Unknown')
+                    item.setdefault('TOTPACKETS', 0)
+                    item.setdefault('TOTDATA', '0 MB')
+                    
+                    # Time-related defaults
+                    time_fields = [
+                        "12AM", "1AM", "2AM", "3AM", "4AM", "5AM", "6AM", "7AM",
+                        "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM",
+                        "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM",
+                        "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
+                    ]
+                    for field in time_fields:
+                        item.setdefault(field, 0)
+                    
+                    all_data.append(item)
+                    
+                except json.JSONDecodeError as e:
+                    logger.debug(f"Invalid JSON line: {line[:100]}... Error: {e}")
+                    continue
+                    
+    except Exception as e:
+        logger.error(f"Error reading {filepath}: {e}")
+        
+    return all_data
+
+def safe_json_parse(json_str):
+    """Safely parse JSON with error handling."""
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        logger.debug(f"JSON parse error: {e}")
+        # Try to fix common formatting issues
+        json_str = json_str.replace("'", '"')  # Replace single quotes
+        json_str = json_str.rstrip(',\n')      # Remove trailing commas
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            return None
 
 def read_data(file_path):
-    # just read a single file now
+    """Read data with enhanced error handling."""
     try:
-        loop = asyncio.get_running_loop()
+        loop = asyncio.get_event_loop()
     except RuntimeError:
-        loop = None
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-    if loop and loop.is_running():
-        future = asyncio.run_coroutine_threadsafe(read_json_file(file_path), loop)
-        all_data = future.result()
-    else:
-        all_data = asyncio.run(read_json_file(file_path))
-
+    try:
+        data = loop.run_until_complete(read_json_file(file_path))
+    except Exception as e:
+        logger.error(f"Failed to read {file_path}: {e}")
+        data = []
+    
     total_cyber9_reports = count_files_in_directory(C9REPORTS_FOLDER)
-    return all_data, total_cyber9_reports
+    return data, total_cyber9_reports
 
 def count_files_in_directory(directory):
     try:
@@ -107,19 +161,72 @@ def create_visualizations(all_data, total_cyber9_reports):
     try:
         start_time = time.time()
         logger.info("Starting data reading process...")
-        if all_data is None:
+        if not all_data:
             logger.error("No data available to create visualizations.")
             return (go.Figure(),) * 13
 
+        # Create DataFrame with fallback for missing columns
         df = pd.DataFrame(all_data)
-        if df.empty:
-            logger.error("No valid data in DataFrame.")
-            return (go.Figure(),) * 13
 
-        logger.debug(f"DataFrame head:\n{df.head()}")
-        logger.info(f"Data reading process completed in {time.time() - start_time:.2f} seconds.")
+        # Create DataFrame with guaranteed columns
+        required_columns = {
+            'DSTIP': 'Unknown',
+            'SRCIP': 'Unknown',
+            'PROTOCOL': 'Unknown',
+            'TOTPACKETS': 0,
+            'TOTDATA': "0 MB",
+            'SRCPORT': 0,
+            'DSTPORT': 0,
+            'SRCCC': '',
+            'DSTCC': '',
+            'SRCMAC': '',
+            'DSTMAC': ''
+        }
+        
+        # Initialize DataFrame with default columns
+        df = pd.DataFrame(all_data)
+        for col, default in required_columns.items():
+            if col not in df.columns:
+                df[col] = default
+                
+        # Process time fields
+        time_columns = [
+            "12AM", "1AM", "2AM", "3AM", "4AM", "5AM", "6AM", "7AM",
+            "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM",
+            "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM",
+            "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
+        ]
+        
+        for col in time_columns:
+            if col not in df.columns:
+                df[col] = 0
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
 
-        # Handle missing values for cols
+        required_hourly_columns = [
+            "12AM", "1AM", "2AM", "3AM", "4AM", "5AM", "6AM", "7AM",
+            "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM",
+            "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM",
+        ]
+
+        required_daily_columns = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+        
+        # Ensure required columns exist
+        required_columns = ['DSTIP', 'SRCIP', 'PROTOCOL', 'TOTPACKETS', 
+                           'TOTDATA', 'SRCPORT', 'DSTPORT']
+        # Ensure all required columns exist
+        for col in required_hourly_columns + required_daily_columns:
+            if col not in df.columns:
+                df[col] = 0  # Initialize missing columns with 0
+
+        # Now process the columns safely
+        for col in required_hourly_columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
+            
+        for col in required_daily_columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
+
+
+        # Rest of your existing processing
         df['DSTIP'] = df['DSTIP'].fillna('Unknown')
         df['SRCIP'] = df['SRCIP'].fillna('Unknown')
         df['PROTOCOL'] = df['PROTOCOL'].fillna('Unknown')
@@ -172,11 +279,6 @@ def create_visualizations(all_data, total_cyber9_reports):
             template="plotly_dark",
         )
 
-        required_hourly_columns = [
-            "12AM", "1AM", "2AM", "3AM", "4AM", "5AM", "6AM", "7AM",
-            "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM",
-            "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM",
-        ]
         for col in required_hourly_columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
 

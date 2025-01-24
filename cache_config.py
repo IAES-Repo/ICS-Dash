@@ -4,6 +4,7 @@ import logging
 from flask_caching import Cache
 from colorlog import ColoredFormatter
 from data_processing import read_and_process_file
+import plotly.graph_objects as go
 from collections import defaultdict
 import math
 import pickle
@@ -57,7 +58,12 @@ def get_from_chunks(key):
 # --- END CHUNKED CACHE HELPERS --- #
 
 def update_cache_for_file(filename):
-    """read data from file and store processed figs into cache using chunked storage."""
+    """Read data from file and store processed figs into cache using chunked storage."""
+
+    #if "custom_" in filename:
+    #    logger.info(f"Skipping cache for custom file {filename}")
+    #    return
+
     file_path = os.path.join("/home/iaes/DiodeSensor/FM1/output", filename)
     with file_locks[file_path]:
         mod_time = os.path.getmtime(file_path)
@@ -69,16 +75,21 @@ def update_cache_for_file(filename):
         logger.info(f"generating figs for {filename}")
         try:
             data, figs, total_reports = read_and_process_file(file_path)
+            
+            # Convert figures to dicts before storage
+            figs_dicts = [f.to_dict() for f in figs]  # <--- CRITICAL FIX
+            
             payload = pickle.dumps({
                 'data': data,
                 'total_reports': total_reports,
                 'timestamp': mod_time,
             })
-            # use chunked set for the big payload
             set_in_chunks(f'cached_data_{filename}', payload)
-            # similarly, for figs if they're large; adjust if figs are small
-            figs_payload = pickle.dumps(figs)
+            
+            # Store figure dictionaries instead of raw figures
+            figs_payload = pickle.dumps(figs_dicts)  # <--- CHANGED
             set_in_chunks(f'visualizations_{filename}', figs_payload)
+            
             cache.set(f'last_update_timestamp_{filename}', mod_time)
             last_file_timestamp[filename] = mod_time
             logger.info(f"cache updated for {filename}")
@@ -96,17 +107,26 @@ def get_cached_data(filename):
     stored = pickle.loads(payload)
     return stored['data'], stored['total_reports']
 
-def get_visualizations(filename):
-    figs_payload = get_from_chunks(f'visualizations_{filename}')
-    if not figs_payload:
-        logger.info(f"no figs in cache for {filename}. forcing update...")
+def get_visualizations(filename, force_refresh=True):
+    print(f"[DEBUG] Loading visuals for {filename}")  # Diagnostic output
+    
+    if force_refresh:
+        print(f"[DEBUG] Force refresh triggered for {filename}")
         update_cache_for_file(filename)
-        figs_payload = get_from_chunks(f'visualizations_{filename}')
+    
+    figs_payload = get_from_chunks(f'visualizations_{filename}')
+    
     if not figs_payload:
-        logger.warning(f"still no figs for {filename} after update, returning empties.")
-        return []
-    figs = pickle.loads(figs_payload)
-    return figs
+        print(f"[ERROR] No figure payload found for {filename}")
+        return [go.Figure()] * 13
+    
+    try:
+        figs_dicts = pickle.loads(figs_payload)
+        print(f"[DEBUG] Loaded {len(figs_dicts)} figure dicts")  # Count verification
+        return [go.Figure(f) for f in figs_dicts]
+    except Exception as e:
+        print(f"[CRITICAL] Figure loading failed: {str(e)}")
+        return [go.Figure()] * 13
 
 def initialize_cache():
     logger.info("initializing cache fresh...")

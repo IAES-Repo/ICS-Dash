@@ -5,6 +5,7 @@ from dash import dcc, html
 from dash.dependencies import Input, Output
 import logging
 import threading
+from collector import NetworkDataAggregator, NetworkDataHandler  
 from dotenv import load_dotenv
 from flask import Flask, redirect, url_for, request, flash, session
 from flask_sqlalchemy import SQLAlchemy
@@ -23,6 +24,7 @@ import redis
 import math
 import pickle
 import zlib
+
 
 # Signal handler to release the port on exit
 def signal_handler(sig, frame):
@@ -299,11 +301,19 @@ with server.app_context():
 # Initialize SocketIO
 socketio = SocketIO(server, cors_allowed_origins="*")
 
+WATCH_DIR = "/home/iaes/DiodeSensor/FM1"
+OUTPUT_DIR = "/home/iaes/DiodeSensor/FM1/output"
+
+# Create data collector components
+aggregator = NetworkDataAggregator(WATCH_DIR, OUTPUT_DIR)
+data_handler = NetworkDataHandler(aggregator)
+
 # Import layouts after cache is initialized
 from layouts import (
     overview_layout,
     one_hour_layout,
     twenty_four_hour_layout,
+    custom_layout
     #seven_days_layout,
 )
 
@@ -311,7 +321,7 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], server=se
 
 
 # Register the callbacks with the Dash app
-register_callbacks(app)
+register_callbacks(app, data_handler)
 
 
 # Add interval and store
@@ -337,6 +347,8 @@ def display_page(pathname):
         return one_hour_layout
     elif pathname == '/24_hours_data':
         return twenty_four_hour_layout
+    elif pathname == '/custom_data':  # New condition
+        return custom_layout
     #elif pathname == '/7_days_data':
     #    return seven_days_layout
     else:
@@ -351,6 +363,10 @@ if __name__ == "__main__":
     watchdog_thread = threading.Thread(target=start_watchdog, args=(directory_to_watch, app.server))
     watchdog_thread.daemon = True
     watchdog_thread.start()
+
+    # ======== START COLLECTOR TASK PROCESSOR ========
+    task_thread = threading.Thread(target=data_handler.process_tasks, daemon=True)
+    task_thread.start()
 
     # Run the Dash app with SSL on 0.0.0.0:80 (Debug)
     logger.info("Initializing the server")
