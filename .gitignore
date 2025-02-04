@@ -17,3 +17,4 @@ jsondata/fm3
 
 create_codebase.py
 codebase.txt
+__pycache__/
