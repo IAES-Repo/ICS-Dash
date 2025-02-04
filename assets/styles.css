@@ -139,3 +139,86 @@ h1 {
 .header-links a:hover {
     background-color: #820000;
 }
+
+/* Custom Search Container */
+#custom-search-container {
+    display: flex;
+    flex-direction: row; /* Align children in a row */
+    align-items: center; /* Vertically center children */
+    justify-content: center; /* Horizontally center children */
+    gap: 10px; /* Add space between children */
+    padding: 10px;
+    background-color: #222;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    margin-bottom: 20px;
+    width: fit-content; /* Make the container only as wide as its content */
+    margin-left: auto; /* Center the container horizontally */
+    margin-right: auto; /* Center the container horizontally */
+}
+
+/* Date picker styling */
+#custom-search-container .DateInput {
+    background-color: #262555;
+    color: white;
+    border-radius: 5px;
+    padding: 2px;
+    gap: 50px; /* Add space between children */
+    outline: none;
+    Height: 25%  !important;
+    Width: 100px !important;
+    border-radius: inherit;
+
+}
+
+#custom-search-container .DateInput input {
+    color: white;
+    font-size: 14px;
+    background-color: transparent;
+    border: none;    
+    outline: none;
+    Height: 22px !important;
+    Width: 100px !important;
+
+}
+
+#custom-search-container .DateInput input::placeholder {
+    color: #888;
+    outline: none;
+
+}
+
+#custom-search-container .DateInput input:focus {
+    outline: none;
+    
+}
+
+/* Time input styling */
+#custom-search-container .dcc.Input {
+    background-color: #222;
+    color: white;
+    border: 1px solid #222;
+    border-radius: 5px;
+    padding: 5px;
+    width: 10px;
+}
+
+#custom-search-container .dcc.Input:focus {
+    border-color: #3498db2d;
+    outline: none;
+}
+
+/* Button styling */
+#custom-search-container .dcc.Button {
+    background-color: #5d0000;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+#custom-search-container .dcc.Button:hover {
+    background-color: #820000;
+}

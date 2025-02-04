@@ -263,43 +263,93 @@ custom_layout = html.Div([
     ),
     html.H1("Custom Timeframe", style={"color": "white", "margin": "16px 0"}),
     
-    html.Div([
-        dcc.DatePickerSingle(
-            id='start-date-picker',
-            min_date_allowed=datetime(2000, 1, 1),
-            max_date_allowed=datetime(2100, 12, 31),
-            initial_visible_month=datetime.now(),
-            date=datetime.now() - timedelta(days=1)
-        ),
-        dcc.Input(
-            id='start-time-input',
-            type='text',
-            placeholder='HH:MM:SS',
-            value='00:00:00',
-            pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$",
-            style={'margin-left': '10px', 'width': '100px'}
-        ),
-        dcc.DatePickerSingle(
-            id='end-date-picker',
-            min_date_allowed=datetime(2000, 1, 1),
-            max_date_allowed=datetime(2100, 12, 31),
-            initial_visible_month=datetime.now(),
-            date=datetime.now()
-        ),
-        dcc.Input(
-            id='end-time-input',
-            type='text',
-            placeholder='HH:MM:SS',
-            value='23:59:59',
-            style={'margin-left': '10px', 'width': '100px'}
-        ),
-        html.Button(
-            'Search',
-            id='search-button',
-            n_clicks=0,
-            style={'margin-left': '10px', 'padding': '5px 15px'}
-        )
-    ], style={'margin': '10px'}),
+    html.Div(
+        [
+        html.Label("Start", style={  # Label for "Start"
+                    'color': 'white',
+                    'font-weight': 'light',
+                    'margin-bottom': '0px',
+                    'text-align': 'center',
+                }),
+            html.Div(
+                [
+                    dcc.DatePickerSingle(
+                        id='start-date-picker',
+                        min_date_allowed=datetime(2000, 1, 1),
+                        max_date_allowed=datetime(2100, 12, 31),
+                        initial_visible_month=datetime.now(),
+                        date=datetime.now() - timedelta(days=1),
+                        style={
+                        'outline': 'none',
+                        
+
+                    }
+                    ),
+                    dcc.Input(
+                        id='start-time-input',
+                        type='text',
+                        placeholder='HH:MM:SS',
+                        value='00:00:00',
+                        pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$",
+                        style={
+                        'margin-left': '10px',  # Add spacing between date picker and input
+                        'width': '70px',
+        
+
+                    }
+                    ),
+                ],
+                className="date-time-group"
+            ),
+            html.Label("End", style={
+            'color': 'white',
+            'font-weight': 'light',
+            'margin-bottom': '0px',
+            'text-align': 'center',
+            'margin-left': '15px',
+            }),
+            html.Div(
+                [
+                    dcc.DatePickerSingle(
+                        id='end-date-picker',
+                        min_date_allowed=datetime(2000, 1, 1),
+                        max_date_allowed=datetime(2100, 12, 31),
+                        initial_visible_month=datetime.now(),
+                        date=datetime.now(),
+                        style={
+                        'outline': 'none',
+                    }
+                    ),
+                    dcc.Input(
+                        id='end-time-input',
+                        type='text',
+                        placeholder='HH:MM:SS',
+                        value='23:59:59',
+                        style={
+                        'margin-left': '10px',  # Add spacing between date picker and input
+                        'width': '70px',
+                    }
+                    ),
+                ],
+                className="date-time-group"
+            ),
+            html.Button(
+                'Search',
+                id='search-button',
+                n_clicks=0,
+                style={
+                    'background-color': '#5d0000',
+                    'color': 'white',
+                    'border': 'none',
+                    'border-radius': '5px',
+                    'padding': '10px 20px',
+                    'cursor': 'pointer',
+                    'margin-left': '10px',
+                }
+            ),
+        ],
+        id='custom-search-container'
+    ),
     
     # Add the missing container with the correct ID
     html.Div(
