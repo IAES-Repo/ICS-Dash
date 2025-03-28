@@ -340,8 +340,8 @@ app.layout = html.Div(
     [Input('url', 'pathname')]
 )
 def display_page(pathname):
-    if not current_user.is_authenticated:
-        return redirect('/login')
+    if not current_user.is_authenticated:    
+        return dcc.Location(id='redirect', href='/login')
     
     if pathname == '/1_hour_data':
         return one_hour_layout

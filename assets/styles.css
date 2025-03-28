@@ -141,20 +141,45 @@ h1 {
 }
 
 /* Custom Search Container */
+/* Ensure the overall custom search container stacks its children vertically */
+/* Overall container for search controls */
 #custom-search-container {
     display: flex;
-    flex-direction: row; /* Align children in a row */
-    align-items: center; /* Vertically center children */
-    justify-content: center; /* Horizontally center children */
-    gap: 10px; /* Add space between children */
+    flex-direction: column; /* Stack rows vertically */
+    align-items: center;
+    gap: 10px;
     padding: 10px;
     background-color: #222;
     border-radius: 10px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     margin-bottom: 20px;
-    width: fit-content; /* Make the container only as wide as its content */
-    margin-left: auto; /* Center the container horizontally */
-    margin-right: auto; /* Center the container horizontally */
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Row for the date/time pickers and search button */
+.search-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Ensure date-time groups display in a row */
+.date-time-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Row for filter inputs */
+.filter-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
 }
 
 /* Date picker styling */

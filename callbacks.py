@@ -129,35 +129,49 @@ def register_callbacks(app, handler):
             State('start-time-input', 'value'),
             State('end-date-picker', 'date'),
             State('end-time-input', 'value'),
-            State('custom-figs-store', 'data')
+            State('custom-figs-store', 'data'),
+            State('filter-protocol', 'value'),
+            State('filter-dstip', 'value'),
+            State('filter-srcip', 'value'),
+            State('filter-srcport', 'value'),
+            State('filter-dstport', 'value')
         ]
     )
-    def update_custom_figs(n_clicks, intervals, start_date, start_time, end_date, end_time, store_data):
+    def update_custom_figs(n_clicks, n_intervals, start_date, start_time, end_date, end_time, store_data, filter_protocol, filter_dstip, filter_srcip, filter_srcport, filter_dstport):
+
         triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        
         if triggered_id == 'search-button':
             if not n_clicks:
                 return no_update
-            
+
+            # parse dates
             try:
                 start_str = f"{start_date} {start_time or '00:00:00'}"
                 end_str = f"{end_date} {end_time or '23:59:59'}"
-                start_datetime = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
-                end_datetime = datetime.strptime(end_str, "%Y-%m-%d %H:%M:%S")
-                
-                if start_datetime >= end_datetime:
-                    raise ValueError("End time must be after start time")
-                    
+                start_dt = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
+                end_dt = datetime.strptime(end_str, "%Y-%m-%d %H:%M:%S")
+                if start_dt >= end_dt:
+                    raise ValueError("end time must be after start time")
             except ValueError as e:
                 return {'status': 'error', 'message': str(e)}
-            
-            task_id = handler.add_custom_task(start_datetime, end_datetime)
+
+            # build filter dict, ignore blanks
+            filters = {
+                'PROTOCOL': filter_protocol.strip() if filter_protocol else None,
+                'DSTIP': filter_dstip.strip() if filter_dstip else None,
+                'SRCIP': filter_srcip.strip() if filter_srcip else None,
+                'SRCPORT': filter_srcport.strip() if filter_srcport else None,
+                'DSTPORT': filter_dstport.strip() if filter_dstport else None,
+            }
+
+            # pass filters to task scheduler (assume you update your handler accordingly)
+            task_id = handler.add_custom_task(start_dt, end_dt, filters=filters)
             return {
                 'status': 'processing',
                 'task_id': task_id,
                 'filename': None,
-                'message': 'Processing request...',
-                'timestamp': time.time()  # Force refresh
+                'message': 'processing request...',
+                'timestamp': time.time()
             }
         
         elif triggered_id == 'custom-status-check':
@@ -269,7 +283,7 @@ def register_callbacks(app, handler):
         return no_update
 
 def clean_old_custom_files():
-    """Remove custom JSON files older than 24 hours"""
+    """Remove custom JSON files older than 1 hour"""
     output_dir = "/home/iaes/DiodeSensor/FM1/output"
     now = datetime.now()
     
@@ -280,7 +294,7 @@ def clean_old_custom_files():
                 cache.delete(f'cached_data_{entry.name}')
                 cache.delete(f'visualizations_{entry.name}')
                 file_time = datetime.fromtimestamp(entry.stat().st_mtime)
-                if (now - file_time) > timedelta(hours=24):
+                if (now - file_time) > timedelta(hours=1):
                     os.remove(entry.path)
                     print(f"Cleaned up old custom file: {entry.name}")
             except Exception as e:

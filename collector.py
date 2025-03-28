@@ -129,57 +129,52 @@ class NetworkDataAggregator:
         except Exception as e:
             raise ValueError(f"Invalid timestamp in filename: {filename}") from e
         
-    def generate_custom_dataset(self, start_datetime, end_datetime):
-        """Generate custom dataset between timestamps"""
+    def generate_custom_dataset(self, start_datetime, end_datetime, filters=None):
         timeframe_str = f"{start_datetime:%Y%m%d%H%M%S}_{end_datetime:%Y%m%d%H%M%S}"
         filename_hash = hashlib.md5(timeframe_str.encode()).hexdigest()[:8]
         output_path = os.path.join(self.output_folder, f"custom_{filename_hash}.json")
         temp_path = output_path + ".tmp"
-        
         if os.path.exists(output_path):
-            print(f"Using existing custom dataset: {output_path}")
+            print(f"using existing dataset: {output_path}")
             return output_path
-        
-        print(f"Generating new custom dataset: {output_path}")
-        
+
         json_files = []
         for entry in os.scandir(self.watch_directory):
             if entry.is_file() and entry.name.endswith("jsonALLConnections.json"):
                 try:
-                    file_datetime = self.extract_timestamp(entry.name)
-                    if start_datetime <= file_datetime <= end_datetime:
+                    file_dt = self.extract_timestamp(entry.name)
+                    if start_datetime <= file_dt <= end_datetime:
                         json_files.append(entry.path)
                 except Exception as e:
-                    print(f"Skipping {entry.name}: {str(e)}")
                     continue
 
         all_data = []
         for file_path in json_files:
-            try:
-                file_data = self.process_file(file_path)
-                if file_data:
-                    all_data.extend(file_data)
-                    print(f"Processed {len(file_data)} records from {os.path.basename(file_path)}")
-            except Exception as e:
-                print(f"\033[31mCritical error processing {file_path}: {e}\033[0m")
-        
+            file_data = self.process_file(file_path)
+            for record in file_data:
+                if filters and not self.record_matches_filters(record, filters):
+                    continue
+                all_data.append(record)
         if not all_data:
-            print("\033[31mNo valid data collected for custom timeframe\033[0m")
+            print("no data collected for custom timeframe with given filters")
             return None
-
         try:
-            # Write as line-delimited JSON
             with open(temp_path, "w") as f:
                 for entry in all_data:
                     f.write(json.dumps(entry) + "\n")
-            
             os.replace(temp_path, output_path)
             return output_path
         except Exception as e:
-            print(f"\033[31mError writing custom dataset: {e}\033[0m")
             if os.path.exists(temp_path):
                 os.remove(temp_path)
             return None
+
+    def record_matches_filters(self, record, filters):
+        for key, value in filters.items():
+            if value and record.get(key, "").strip().lower() != value.lower():
+                return False
+        return True
+
 
 class NetworkDataHandler:
     def __init__(self, aggregator):
@@ -193,7 +188,7 @@ class NetworkDataHandler:
             "24_hours": timedelta(hours=24)
         }
 
-    def add_custom_task(self, start_datetime, end_datetime):
+    def add_custom_task(self, start_datetime, end_datetime, filters=None):
         timeframe_str = f"{start_datetime:%Y%m%d%H%M%S}_{end_datetime:%Y%m%d%H%M%S}"
         filename_hash = hashlib.md5(timeframe_str.encode()).hexdigest()[:8]
         task_id = f"custom_{filename_hash}"
@@ -206,13 +201,13 @@ class NetworkDataHandler:
                     'created_at': datetime.now(),
                     'message': None
                 }
-                self.task_queue.append(('custom', start_datetime, end_datetime, task_id))
+                # include filters in the task tuple
+                self.task_queue.append(('custom', start_datetime, end_datetime, task_id, filters))
         
         return task_id
 
     def process_tasks(self):
         while True:
-            # Clean up old tasks (older than 1 hour)
             now = datetime.now()
             with self.lock:
                 to_remove = [
@@ -227,12 +222,13 @@ class NetworkDataHandler:
                     task = self.task_queue.popleft()
                 
                 if task[0] == 'custom':
-                    _, start, end, task_id = task
+                    # now task tuple is: ('custom', start, end, task_id, filters)
+                    _, start, end, task_id, filters = task
                     try:
                         with self.lock:
                             self.active_tasks[task_id]['status'] = 'processing'
                         
-                        result = self.aggregator.generate_custom_dataset(start, end)
+                        result = self.aggregator.generate_custom_dataset(start, end, filters=filters)
                         
                         with self.lock:
                             if result:

@@ -263,97 +263,107 @@ custom_layout = html.Div([
     ),
     html.H1("Custom Timeframe", style={"color": "white", "margin": "16px 0"}),
     
+    # Container for search controls and filter inputs
     html.Div(
         [
-        html.Label("Start", style={  # Label for "Start"
-                    'color': 'white',
-                    'font-weight': 'light',
-                    'margin-bottom': '0px',
-                    'text-align': 'center',
-                }),
+            # Row for date/time controls and search button
             html.Div(
                 [
-                    dcc.DatePickerSingle(
-                        id='start-date-picker',
-                        min_date_allowed=datetime(2000, 1, 1),
-                        max_date_allowed=datetime(2100, 12, 31),
-                        initial_visible_month=datetime.now(),
-                        date=datetime.now() - timedelta(days=1),
-                        style={
-                        'outline': 'none',
-                        
-
-                    }
+                    html.Label("Start:", style={
+                        "color": "white",
+                        "font-weight": "light",
+                        "margin-bottom": "0px",
+                        "text-align": "center"
+                    }),
+                    html.Div(
+                        [
+                            dcc.DatePickerSingle(
+                                id='start-date-picker',
+                                min_date_allowed=datetime(2024, 11, 20),
+                                max_date_allowed=datetime(2100, 12, 31),
+                                initial_visible_month=datetime.now(),
+                                date=datetime.now() - timedelta(days=1),
+                                style={"outline": "none"}
+                            ),
+                            dcc.Input(
+                                id='start-time-input',
+                                type='text',
+                                placeholder='HH:MM:SS',
+                                value='00:00:00',
+                                pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$",
+                                style={"margin-left": "10px", "width": "70px"}
+                            ),
+                        ],
+                        className="date-time-group"
                     ),
-                    dcc.Input(
-                        id='start-time-input',
-                        type='text',
-                        placeholder='HH:MM:SS',
-                        value='00:00:00',
-                        pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$",
-                        style={
-                        'margin-left': '10px',  # Add spacing between date picker and input
-                        'width': '70px',
-        
-
-                    }
+                    html.Label("End:", style={
+                        "color": "white",
+                        "font-weight": "light",
+                        "margin-bottom": "0px",
+                        "text-align": "center",
+                        "margin-left": "15px"
+                    }),
+                    html.Div(
+                        [
+                            dcc.DatePickerSingle(
+                                id='end-date-picker',
+                                min_date_allowed=datetime(2000, 1, 1),
+                                max_date_allowed=datetime(2100, 12, 31),
+                                initial_visible_month=datetime.now(),
+                                date=datetime.now(),
+                                style={"outline": "none"}
+                            ),
+                            dcc.Input(
+                                id='end-time-input',
+                                type='text',
+                                placeholder='HH:MM:SS',
+                                value='23:59:59',
+                                style={"margin-left": "10px", "width": "70px"}
+                            ),
+                        ],
+                        className="date-time-group"
                     ),
+                    html.Button(
+                        'Search',
+                        id='search-button',
+                        n_clicks=0,
+                        style={
+                            "background-color": "#5d0000",
+                            "color": "white",
+                            "border": "none",
+                            "border-radius": "5px",
+                            "padding": "10px 20px",
+                            "cursor": "pointer",
+                            "margin-left": "10px"
+                        }
+                    )
                 ],
-                className="date-time-group"
+                className="search-controls"
             ),
-            html.Label("End", style={
-            'color': 'white',
-            'font-weight': 'light',
-            'margin-bottom': '0px',
-            'text-align': 'center',
-            'margin-left': '15px',
-            }),
+            # Row for filter inputs
             html.Div(
                 [
-                    dcc.DatePickerSingle(
-                        id='end-date-picker',
-                        min_date_allowed=datetime(2000, 1, 1),
-                        max_date_allowed=datetime(2100, 12, 31),
-                        initial_visible_month=datetime.now(),
-                        date=datetime.now(),
-                        style={
-                        'outline': 'none',
-                    }
-                    ),
-                    dcc.Input(
-                        id='end-time-input',
-                        type='text',
-                        placeholder='HH:MM:SS',
-                        value='23:59:59',
-                        style={
-                        'margin-left': '10px',  # Add spacing between date picker and input
-                        'width': '70px',
-                    }
-                    ),
+                    html.Label("Protocol:", style={"color": "white", "padding-right": "2px", "padding-left": "10px"}),
+                    dcc.Dropdown(['TCP', 'UDP', 'ARP', 'ICMP', 'IGMP', 'HOPOPT', 'IPv6-ICMP'], id="filter-protocol", placeholder="e.g. TCP", value="", style={"width": "120px"}),
+                    html.Label("DSTIP:", style={"color": "white", "padding-right": "2px", "padding-left": "10px"}),
+                    dcc.Input(id="filter-dstip", type="text", placeholder="e.g. 10.0.0.1", value="", style={"width": "120px"}),
+                    html.Label("SRCIP:", style={"color": "white", "padding-right": "2px", "padding-left": "10px"}),
+                    dcc.Input(id="filter-srcip", type="text", placeholder="e.g. 192.168.1.1", value="", style={"width": "120px"}),
+                    html.Label("SRCPORT:", style={"color": "white", "padding-right": "2px", "padding-left": "10px"}),
+                    dcc.Input(id="filter-srcport", type="text", placeholder="e.g. 80", value="", style={"width": "120px"}),
+                    html.Label("DSTPORT:", style={"color": "white", "padding-right": "2px", "padding-left": "10px"}),
+                    dcc.Input(id="filter-dstport", type="text", placeholder="e.g. 443", value="", style={"width": "120px"})
                 ],
-                className="date-time-group"
-            ),
-            html.Button(
-                'Search',
-                id='search-button',
-                n_clicks=0,
-                style={
-                    'background-color': '#5d0000',
-                    'color': 'white',
-                    'border': 'none',
-                    'border-radius': '5px',
-                    'padding': '10px 20px',
-                    'cursor': 'pointer',
-                    'margin-left': '10px',
-                }
-            ),
+                className="filter-controls"
+            )
         ],
-        id='custom-search-container'
+        id="custom-search-container"
     ),
     
-    # Add the missing container with the correct ID
+    
+    # Container for custom visuals
     html.Div(
-        id='custom-visuals-container',
+        id="custom-visuals-container",
         children=[
             html.Div(className="row", children=[
                 html.Div(className="col-md-4", children=[
