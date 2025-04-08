@@ -7,24 +7,17 @@ import logging
 import threading
 from collector import NetworkDataAggregator, NetworkDataHandler  
 from dotenv import load_dotenv
-from flask import Flask, redirect, url_for, request, flash, session
+from flask import Flask, redirect, url_for, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from passlib.hash import pbkdf2_sha256
-from cache_config import cache, initialize_cache, get_visualizations, get_from_chunks, set_in_chunks
-import plotly.graph_objects as go
+from cache_config import cache, initialize_cache
 from watchdog_handler import start_watchdog
 from callbacks import register_callbacks
 from colorlog import ColoredFormatter
 import signal
 import sys
-from OpenSSL import SSL
 from flask_socketio import SocketIO
-import redis
-import math
-import pickle
-import zlib
-
 
 # Signal handler to release the port on exit
 def signal_handler(sig, frame):
@@ -288,18 +281,18 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# IMPORTANT: initialize cache AFTER creating server but BEFORE loading layouts
+# initialize cache AFTER creating server but BEFORE loading layouts
 cache.init_app(server, config={
     'CACHE_TYPE': 'redis',
     'CACHE_DEFAULT_TIMEOUT': 3600,
-    'CACHE_REDIS_URL': 'redis://127.0.0.1:6379/0'
+    'CACHE_REDIS_URL': os.getenv('REDIS_URL')
 })
 
 with server.app_context():
     initialize_cache()
 
 # Initialize SocketIO
-socketio = SocketIO(server, cors_allowed_origins="*")
+socketio = SocketIO(server, cors_allowed_origins='*')
 
 WATCH_DIR = "/home/iaes/DiodeSensor/FM1"
 OUTPUT_DIR = "/home/iaes/DiodeSensor/FM1/output"
@@ -368,7 +361,7 @@ if __name__ == "__main__":
     task_thread = threading.Thread(target=data_handler.process_tasks, daemon=True)
     task_thread.start()
 
-    # Run the Dash app with SSL on 0.0.0.0:80 (Debug)
+    # Run the Dash app with SSL on 0.0.0.0:8443
     logger.info("Initializing the server")
     socketio.run(server, host=os.getenv('LOCAL_IP'), port=8443, debug=False, use_reloader=False, allow_unsafe_werkzeug=True, ssl_context=('./certs/pem.pem', './certs/key.key'))
     
